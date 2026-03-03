@@ -1,0 +1,311 @@
+---
+title: Authentication
+description: GitHub OAuth setup, security considerations, and session management in gitDash
+---
+
+# Authentication
+
+gitDash uses GitHub OAuth for secure authentication and API access. This guide covers the OAuth flow, required scopes, and security best practices.
+
+## GitHub OAuth flow
+
+gitDash implements OAuth 2.0 authentication using Auth.js (NextAuth):
+
+1. User clicks "Sign in with GitHub" on the landing page
+2. Browser redirects to GitHub's authorization page
+3. User authorizes the gitDash application
+4. GitHub redirects back to gitDash with an authorization code
+5. Auth.js exchanges the code for an access token
+6. Access token is encrypted and stored in a JWT session
+7. User can now access protected routes and make GitHub API calls
+
+## Creating a GitHub OAuth app
+
+Follow these steps to create a GitHub OAuth application:
+
+<Steps>
+  <Step title="Navigate to GitHub settings">
+    Go to [GitHub Developer Settings](https://github.com/settings/developers) and click **OAuth Apps** in the sidebar.
+  </Step>
+
+  <Step title="Create new OAuth app">
+    Click **New OAuth App** and fill in the application details:
+
+    - **Application name**: Choose a descriptive name (e.g., `gitDash`)
+    - **Homepage URL**: Your application URL
+      - Development: `http://localhost:3000`
+      - Production: `https://yourdomain.com`
+    - **Application description**: Optional description for your reference
+    - **Authorization callback URL**: **Critical** - must match exactly
+      - Development: `http://localhost:3000/api/auth/callback/github`
+      - Production: `https://yourdomain.com/api/auth/callback/github`
+  </Step>
+
+  <Step title="Generate client credentials">
+    After creating the app:
+
+    1. Copy the **Client ID** - you'll need this for `GITHUB_CLIENT_ID`
+    2. Click **Generate a new client secret**
+    3. Copy the **Client Secret** immediately - you'll need this for `GITHUB_CLIENT_SECRET`
+
+    <Warning>
+      Client secrets are only shown once. If you lose it, you'll need to generate a new one.
+    </Warning>
+  </Step>
+</Steps>
+
+## Required OAuth scopes
+
+gitDash requests the following GitHub scopes during authentication:
+
+```typescript
+scope: 'repo read:user user:email'
+```
+
+These scopes are defined in `lib/auth.ts:32-36`:
+
+| Scope | Purpose | Access level |
+|-------|---------|-------------|
+| `repo` | Access repository data, commits, and content | Full repository access (public and private) |
+| `read:user` | Read user profile information | Read-only access to profile data |
+| `user:email` | Access user email addresses | Read-only access to email addresses |
+
+<Note>
+  The `repo` scope provides full read/write access to repositories. gitDash only performs read operations but requires this scope to access private repository data.
+</Note>
+
+## Environment variable configuration
+
+Configure authentication using these environment variables:
+
+```bash .env.local
+# GitHub OAuth App Configuration
+GITHUB_CLIENT_ID=your_github_client_id_here
+GITHUB_CLIENT_SECRET=your_github_client_secret_here
+
+# NextAuth.js Configuration
+AUTH_SECRET=your_random_secret_here
+NEXTAUTH_URL=http://localhost:3000
+```
+
+### Variable details
+
+#### GITHUB_CLIENT_ID
+
+- **Required**: Yes
+- **Source**: GitHub OAuth App settings
+- **Example**: `Iv1.a1b2c3d4e5f6g7h8`
+- **Validation**: Checked at startup in `lib/auth.ts:15-17`
+
+#### GITHUB_CLIENT_SECRET
+
+- **Required**: Yes
+- **Source**: GitHub OAuth App settings
+- **Security**: Never commit to version control
+- **Validation**: Checked at startup in `lib/auth.ts:19-21`
+
+#### AUTH_SECRET
+
+- **Required**: Yes
+- **Purpose**: Signs and encrypts JWT sessions
+- **Generation**: `openssl rand -base64 32`
+- **Security**: Must be cryptographically random
+- **Validation**: Checked at startup in `lib/auth.ts:23-25`
+
+#### NEXTAUTH_URL
+
+- **Required**: Yes (production), Optional (development)
+- **Purpose**: Base URL for OAuth callbacks
+- **Development**: `http://localhost:3000`
+- **Production**: Your deployed domain (e.g., `https://gitdash.example.com`)
+
+## Session management
+
+gitDash uses JWT-based sessions for stateless authentication. Sessions are configured in `lib/auth.ts:62-64`:
+
+```typescript
+session: {
+  strategy: 'jwt',
+}
+```
+
+### Session structure
+
+The session object contains:
+
+```typescript
+{
+  user: {
+    name: string;        // GitHub display name
+    email: string;       // Primary email
+    image: string;       // Avatar URL
+    username: string;    // GitHub login
+    avatarUrl: string;   // Avatar URL (duplicate)
+  },
+  accessToken: string;   // Encrypted GitHub access token
+}
+```
+
+### Token storage
+
+Access tokens are stored securely:
+
+1. **JWT callback** (lines 40-48): Stores access token in JWT on first sign-in
+2. **Session callback** (lines 49-57): Passes token to client session
+3. **Encryption**: JWT is signed with `AUTH_SECRET`, preventing tampering
+4. **No database**: Tokens are not persisted server-side
+
+### Session helpers
+
+gitDash provides server-side session utilities:
+
+#### getSession()
+
+Retrieve the current session (returns null if not authenticated):
+
+```typescript
+import { getSession } from '@/lib/auth';
+
+const session = await getSession();
+if (session) {
+  console.log(session.user.username);
+  console.log(session.accessToken);
+}
+```
+
+Defined in `lib/auth.ts:77-91`.
+
+#### requireAuth()
+
+Require authentication (throws error if not authenticated):
+
+```typescript
+import { requireAuth } from '@/lib/auth';
+
+// In a server component or API route
+const session = await requireAuth();
+// Guaranteed to have session or error is thrown
+```
+
+Defined in `lib/auth.ts:97-103`.
+
+## Security considerations
+
+### Token encryption
+
+- Access tokens are encrypted in JWT sessions using `AUTH_SECRET`
+- Tokens are never exposed to client-side JavaScript
+- Sessions are signed to prevent tampering
+
+### Session lifecycle
+
+- Sessions are stateless (no server-side storage)
+- JWTs expire automatically (configurable in Auth.js)
+- Sign-out clears the session cookie
+- No token revocation needed (tokens expire naturally)
+
+### Callback URL validation
+
+- Auth.js validates callback URLs match the configured OAuth app
+- `trustHost: true` enables flexible deployment (lines 66)
+- Base path explicitly set to `/api/auth` (line 68)
+
+### Environment security
+
+<Warning>
+  **Never commit credentials to version control**:
+  
+  - `.env.local` is in `.gitignore` by default
+  - Use environment variables in CI/CD
+  - Rotate secrets if accidentally exposed
+</Warning>
+
+### Production requirements
+
+<CardGroup cols={2}>
+  <Card title="Use HTTPS" icon="lock">
+    Always use HTTPS in production to protect tokens in transit
+  </Card>
+  
+  <Card title="Separate OAuth apps" icon="split">
+    Create separate OAuth apps for development and production
+  </Card>
+  
+  <Card title="Rotate secrets" icon="rotate">
+    Periodically rotate `AUTH_SECRET` and regenerate client secrets
+  </Card>
+  
+  <Card title="Monitor access" icon="eye">
+    Review authorized applications in GitHub settings regularly
+  </Card>
+</CardGroup>
+
+## Scopes and permissions
+
+### What gitDash can access
+
+With the requested scopes, gitDash can:
+
+- Read repository commits, branches, and content
+- Access both public and private repositories
+- Read user profile information and email addresses
+- Make API requests on behalf of the authenticated user
+
+### What gitDash cannot do
+
+Even with `repo` scope, gitDash's implementation does not:
+
+- Modify repository content or settings
+- Create or modify issues or pull requests
+- Change user profile information
+- Access or modify GitHub Actions or Secrets
+
+<Note>
+  All gitDash operations are read-only. The `repo` scope is required to access private repository data, but no write operations are performed.
+</Note>
+
+## Troubleshooting authentication
+
+### OAuth callback mismatch
+
+**Error**: `redirect_uri_mismatch`
+
+**Solution**: Ensure the callback URL in your OAuth app exactly matches:
+- Development: `http://localhost:3000/api/auth/callback/github`
+- Production: `https://yourdomain.com/api/auth/callback/github`
+
+### Invalid client credentials
+
+**Error**: `invalid_client`
+
+**Solution**: 
+- Verify `GITHUB_CLIENT_ID` matches your OAuth app
+- Regenerate `GITHUB_CLIENT_SECRET` if uncertain
+- Check for extra whitespace in environment variables
+
+### Session not persisting
+
+**Error**: Redirected to sign-in after authentication
+
+**Solution**:
+- Ensure `AUTH_SECRET` is set and strong
+- Check browser allows cookies
+- Verify `NEXTAUTH_URL` matches your application URL
+- Clear browser cookies and try again
+
+### Environment variable not loaded
+
+**Error**: `GITHUB_CLIENT_ID environment variable is required`
+
+**Solution**:
+- Confirm `.env.local` exists in project root
+- Restart the development server after changing environment variables
+- Check variable names match exactly (case-sensitive)
+
+## API reference
+
+For programmatic access to authentication:
+
+<Card title="Auth API reference" icon="code" href="/api-reference/auth">
+  Explore session management and authentication endpoints
+</Card>

@@ -1,0 +1,562 @@
+---
+title: Visualizations
+description: Explore gitDash's comprehensive charts and visual components for analyzing repository contributions
+---
+
+gitDash provides a rich set of interactive visualizations to help you understand repository activity, contributor patterns, and code evolution over time.
+
+## Chart types overview
+
+<CardGroup cols={2}>
+  <Card title="Timeline charts" icon="chart-line">
+    Track commits and line changes over time with interactive timelines.
+  </Card>
+  
+  <Card title="Heatmaps" icon="grid">
+    Visualize activity patterns by day, week, and hour.
+  </Card>
+  
+  <Card title="Bar charts" icon="chart-bar">
+    Compare contributors by commits, additions, and net lines.
+  </Card>
+  
+  <Card title="Gantt charts" icon="calendar">
+    See contributor timelines and contribution periods.
+  </Card>
+</CardGroup>
+
+## Timeline visualizations
+
+### Commits timeline
+
+Displays commit activity over time with configurable time ranges.
+
+**Location:** `components/charts/CommitsTimeline.tsx`
+
+```tsx
+import { CommitsTimeline } from "@/components/charts/CommitsTimeline";
+
+<CommitsTimeline dailyMetrics={dailyMetrics} />
+```
+
+<Tabs>
+  <Tab title="Features">
+    - Time range toggle (Year/Quarter/Month/Week)
+    - Aggregated data based on selected range
+    - Hover tooltips with top contributor
+    - Filled area chart with smooth curves
+    - Responsive design
+  </Tab>
+  
+  <Tab title="Metrics shown">
+    - Total commits per period
+    - Number of time periods
+    - Average commits per period
+    - Top contributor per data point
+  </Tab>
+</Tabs>
+
+**Time range selector:**
+
+```tsx components/charts/TimelineSelector.tsx
+const [selectedRange, setSelectedRange] = useState<TimeRange>("month");
+
+<TimelineSelector
+  selectedRange={selectedRange}
+  onRangeChange={setSelectedRange}
+/>
+```
+
+**Chart configuration:**
+
+```typescript
+const chartData = {
+  labels: aggregatedData.map(d => d.label),
+  datasets: [{
+    label: "Commits",
+    data: aggregatedData.map(d => d.commits),
+    borderColor: METRIC_COLORS.commits.hex,
+    backgroundColor: METRIC_COLORS.commits.rgba(0.1),
+    fill: true,
+    tension: 0.4
+  }]
+};
+```
+
+### Lines changed timeline
+
+Shows additions, deletions, and net lines over time with interactive legend.
+
+**Location:** `components/charts/LinesChangedTimeline.tsx`
+
+```tsx
+import { LinesChangedTimeline } from "@/components/charts/LinesChangedTimeline";
+
+<LinesChangedTimeline dailyMetrics={dailyMetrics} />
+```
+
+<Accordion title="Interactive legend">
+  Click legend items to show/hide data series:
+  
+  - **Lines Added** (green): Total additions per period
+  - **Lines Removed** (red): Total deletions per period
+  - **Net Lines** (pink): Net change (additions - deletions)
+  
+  ```tsx
+  const [visibleLines, setVisibleLines] = useState({
+    added: true,
+    deleted: true,
+    net: false  // Hidden by default
+  });
+  ```
+</Accordion>
+
+**Multiple datasets:**
+
+```typescript
+const datasets = [];
+
+if (visibleLines.added) {
+  datasets.push({
+    label: "Lines Added",
+    data: aggregatedData.map(d => d.additions),
+    borderColor: METRIC_COLORS.additions.hex,
+    backgroundColor: METRIC_COLORS.additions.rgba(0.05)
+  });
+}
+
+if (visibleLines.deleted) {
+  datasets.push({
+    label: "Lines Removed",
+    data: aggregatedData.map(d => d.deletions),
+    borderColor: METRIC_COLORS.deletions.hex
+  });
+}
+```
+
+## Heatmap visualizations
+
+### Activity heatmap
+
+Shows commit patterns by day of week and hour of day.
+
+**Location:** `components/charts/ActivityHeatmap.tsx`
+
+```tsx
+import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap";
+
+<ActivityHeatmap commitTimes={commitTimes} />
+```
+
+<Tabs>
+  <Tab title="Day of week">
+    7-column grid showing commits for each weekday:
+    
+    - Sunday through Saturday
+    - Color intensity based on activity
+    - Hover tooltips with exact counts
+    - Identifies most active days
+  </Tab>
+  
+  <Tab title="Hour of day">
+    24-column grid showing commits by hour (UTC):
+    
+    - 0-23 hour labels
+    - Smaller cell size for compact display
+    - Identifies peak working hours
+    - Useful for global team analysis
+  </Tab>
+</Tabs>
+
+**Color intensity calculation:**
+
+```typescript lib/format.ts
+export function getHeatmapColor(value: number, maxValue: number): string {
+  const intensity = maxValue > 0 ? value / maxValue : 0;
+  
+  if (intensity === 0) return "bg-gray-100";
+  if (intensity < 0.2) return "bg-teal-200";
+  if (intensity < 0.4) return "bg-teal-300";
+  if (intensity < 0.6) return "bg-teal-400";
+  if (intensity < 0.8) return "bg-teal-500";
+  return "bg-teal-600";
+}
+```
+
+### Contribution heatmap
+
+GitHub-style 6-month contribution grid with navigation.
+
+**Location:** `components/charts/ContributionHeatmap.tsx`
+
+```tsx
+import { ContributionHeatmap } from "@/components/charts/ContributionHeatmap";
+
+<ContributionHeatmap
+  title="Commits Over Time"
+  dailyData={dailyCommits}
+  colorScheme="green"
+  firstCommitDate={firstDate}
+  lastCommitDate={lastDate}
+/>
+```
+
+<Info>
+The contribution heatmap uses a 7x26 grid (7 days × ~26 weeks = 6 months).
+</Info>
+
+**Features:**
+
+- Navigate between 6-month windows
+- Multiple color schemes (green, orange, red, teal, purple)
+- Month labels on top
+- Weekday labels (Mon, Wed, Fri)
+- Interactive tooltips
+- Intensity-based shading (5 levels)
+
+**Navigation:**
+
+```tsx
+const handlePrevious = () => {
+  if (canNavigate(endDate, "prev", firstCommitDate, lastCommitDate)) {
+    setEndDate(navigate6MonthWindow(endDate, "prev"));
+  }
+};
+```
+
+**Available color schemes:**
+
+<Tabs>
+  <Tab title="Green">
+    Classic GitHub-style green for general commits.
+  </Tab>
+  <Tab title="Teal">
+    Teal scheme for additions/positive metrics.
+  </Tab>
+  <Tab title="Red">
+    Red scheme for deletions/warnings.
+  </Tab>
+  <Tab title="Amber">
+    Amber scheme for moderate activity.
+  </Tab>
+  <Tab title="Purple">
+    Purple scheme for reviews or special events.
+  </Tab>
+</Tabs>
+
+## Bar chart visualizations
+
+### Net lines bar chart
+
+Horizontal bar chart showing top contributors by net lines added.
+
+**Location:** `components/charts/NetLinesBar.tsx`
+
+```tsx
+import { NetLinesBar } from "@/components/charts/NetLinesBar";
+
+<NetLinesBar 
+  contributors={contributors}
+  maxContributors={10}
+/>
+```
+
+**Features:**
+
+- Shows top 10 contributors (configurable)
+- Color coding: green for positive, red for negative
+- Horizontal orientation for name readability
+- Dynamic height based on contributor count
+
+```typescript
+const topContributors = [...contributors]
+  .sort((a, b) => b.netLines - a.netLines)
+  .slice(0, maxContributors);
+
+const data = {
+  labels: topContributors.map(c => c.githubLogin || c.name),
+  datasets: [{
+    label: "Net Lines",
+    data: topContributors.map(c => c.netLines),
+    backgroundColor: topContributors.map(c =>
+      c.netLines >= 0 
+        ? METRIC_COLORS.additions.rgba(0.8)
+        : METRIC_COLORS.deletions.rgba(0.8)
+    )
+  }]
+};
+```
+
+### Add/remove stacked chart
+
+Stacked horizontal bar showing additions and deletions per contributor.
+
+**Location:** `components/charts/AddRemoveStacked.tsx`
+
+```tsx
+import { AddRemoveStacked } from "@/components/charts/AddRemoveStacked";
+
+<AddRemoveStacked 
+  contributors={contributors}
+  maxContributors={10}
+/>
+```
+
+**Stacked datasets:**
+
+```typescript
+const data = {
+  labels: topContributors.map(c => c.githubLogin || c.name),
+  datasets: [
+    {
+      label: "Additions",
+      data: topContributors.map(c => c.additions),
+      backgroundColor: METRIC_COLORS.additions.rgba(0.8)
+    },
+    {
+      label: "Deletions",
+      data: topContributors.map(c => c.deletions),
+      backgroundColor: METRIC_COLORS.deletions.rgba(0.8)
+    }
+  ]
+};
+
+const options = {
+  indexAxis: "y" as const,
+  scales: {
+    x: { stacked: true },
+    y: { stacked: true }
+  }
+};
+```
+
+## Gantt chart visualization
+
+### Contribution Gantt
+
+Interactive timeline showing when each contributor was active.
+
+**Location:** `components/charts/ContributionGantt.tsx`
+
+```tsx
+import { ContributionGantt } from "@/components/charts/ContributionGantt";
+
+<ContributionGantt timeline={timeline} />
+```
+
+<Tabs>
+  <Tab title="Features">
+    - Users on Y-axis (sorted by join date)
+    - Time on X-axis (date range)
+    - Color intensity based on daily activity
+    - Toggle between metrics
+    - Scrollable horizontally and vertically
+    - Interactive tooltips
+  </Tab>
+  
+  <Tab title="Metrics">
+    - Commits per day
+    - Lines added per day
+    - Lines removed per day
+    - Net lines per day
+  </Tab>
+</Tabs>
+
+**Metric toggle:**
+
+```tsx components/charts/MetricToggle.tsx
+import { MetricToggle } from "@/components/charts/MetricToggle";
+
+const [selectedMetric, setSelectedMetric] = useState<MetricType>("commits");
+
+<MetricToggle
+  selectedMetric={selectedMetric}
+  onMetricChange={setSelectedMetric}
+  availableMetrics={["commits", "additions", "deletions", "net"]}
+/>
+```
+
+**Cell rendering:**
+
+```tsx components/charts/GanttRow.tsx
+<GanttRow
+  user={user}
+  dates={allDates}
+  metric={selectedMetric}
+  cellWidth={cellWidth}
+  cellHeight={cellHeight}
+  onCellHover={handleCellHover}
+  onCellLeave={handleCellLeave}
+/>
+```
+
+**Interactive tooltips:**
+
+```tsx components/charts/GanttTooltip.tsx
+<GanttTooltip
+  visible={tooltip.visible}
+  x={tooltip.x}
+  y={tooltip.y}
+  date={tooltip.date}
+  value={tooltip.value}
+  userName={tooltip.userName}
+  metric={selectedMetric}
+/>
+```
+
+## Shared components
+
+### Timeline selector
+
+Time range toggle used across multiple charts.
+
+```tsx components/charts/TimelineSelector.tsx
+export function TimelineSelector({ selectedRange, onRangeChange }) {
+  return (
+    <div className="flex gap-2">
+      {["week", "month", "quarter", "year"].map(range => (
+        <button
+          key={range}
+          onClick={() => onRangeChange(range)}
+          className={selectedRange === range ? "active" : ""}
+        >
+          {range}
+        </button>
+      ))}
+    </div>
+  );
+}
+```
+
+### Metric toggle
+
+Switch between different metrics (commits, additions, deletions, net).
+
+```tsx components/charts/MetricToggle.tsx
+const metricLabels: Record<MetricType, string> = {
+  commits: "Commits",
+  additions: "Lines Added",
+  deletions: "Lines Removed",
+  net_lines: "Net Lines"
+};
+```
+
+## Chart.js integration
+
+All charts use Chart.js with react-chartjs-2.
+
+<Note>
+Chart.js must be registered with required components before use.
+</Note>
+
+```typescript
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from "chart.js";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+```
+
+## Color system
+
+Consistent colors across all visualizations.
+
+```typescript lib/constants.ts
+export const METRIC_COLORS = {
+  commits: {
+    hex: "#0ea5e9",
+    rgb: "14, 165, 233",
+    rgba: (alpha: number) => `rgba(14, 165, 233, ${alpha})`
+  },
+  additions: {
+    hex: "#14b8a6",
+    rgb: "20, 184, 166",
+    rgba: (alpha: number) => `rgba(20, 184, 166, ${alpha})`
+  },
+  deletions: {
+    hex: "#ef4444",
+    rgb: "239, 68, 68",
+    rgba: (alpha: number) => `rgba(239, 68, 68, ${alpha})`
+  },
+  netLines: {
+    hex: "#ec4899",
+    rgb: "236, 72, 153",
+    rgba: (alpha: number) => `rgba(236, 72, 153, ${alpha})`
+  }
+};
+```
+
+## Responsive design
+
+All charts adapt to different screen sizes:
+
+```typescript
+const options = {
+  responsive: true,
+  maintainAspectRatio: false,
+  layout: {
+    padding: {
+      left: 10,
+      right: 10,
+      top: 10,
+      bottom: 10
+    }
+  }
+};
+```
+
+## Performance optimization
+
+<Tabs>
+  <Tab title="Memoization">
+    Use `useMemo` to prevent unnecessary recalculations:
+    
+    ```tsx
+    const aggregatedData = useMemo(() => {
+      return aggregateTimeline(dailyMetrics, selectedRange);
+    }, [dailyMetrics, selectedRange]);
+    ```
+  </Tab>
+  
+  <Tab title="Lazy loading">
+    Load charts only when visible:
+    
+    ```tsx
+    <Suspense fallback={<Spinner />}>
+      <LazyChart data={data} />
+    </Suspense>
+    ```
+  </Tab>
+  
+  <Tab title="Data aggregation">
+    Pre-aggregate data before rendering:
+    
+    ```typescript
+    export function aggregateTimeline(
+      dailyMetrics: DailyMetric[], 
+      range: TimeRange
+    ) {
+      // Aggregate by week/month/quarter/year
+    }
+    ```
+  </Tab>
+</Tabs>

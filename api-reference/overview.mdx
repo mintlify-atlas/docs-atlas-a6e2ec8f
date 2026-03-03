@@ -1,0 +1,179 @@
+---
+title: 'API Overview'
+description: 'Authentication, rate limiting, and error handling for gitDash API'
+---
+
+## Base URL
+
+All API requests are made to:
+
+```
+https://your-domain.com/api
+```
+
+## Authentication
+
+All API endpoints require authentication via **NextAuth session**. Users must be signed in with their GitHub account to access the API.
+
+### Session Requirements
+
+The API validates sessions using `getSession()` from `@/lib/auth`. If no valid session is found, endpoints return:
+
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+**Status Code:** `401`
+
+### GitHub Access Token
+
+Once authenticated, the API uses the user's GitHub OAuth access token (`session.accessToken`) to interact with the GitHub REST API via Octokit.
+
+## Rate Limiting
+
+### GitHub API Rate Limits
+
+gitDash inherits GitHub's API rate limits:
+
+- **Authenticated requests:** 5,000 requests per hour
+- **Rate limit headers** are passed through in responses:
+
+```
+X-RateLimit-Limit: 5000
+X-RateLimit-Remaining: 4999
+X-RateLimit-Reset: 1234567890
+```
+
+### Advanced Analysis Endpoints
+
+Advanced analysis endpoints check rate limits before processing:
+
+- **Warning threshold:** 100 requests remaining
+- If below threshold, returns `429 Too Many Requests`
+
+```json
+{
+  "error": "GitHub API rate limit low (50 requests remaining). Please try again later.",
+  "code": "RATE_LIMIT_LOW"
+}
+```
+
+## Error Responses
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": "Error message describing what went wrong"
+}
+```
+
+### Common Error Codes
+
+| Status Code | Description | Example |
+|------------|-------------|----------|
+| `400` | Bad Request | Missing required parameters |
+| `401` | Unauthorized | No valid session found |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Internal Server Error | Unexpected server error |
+| `503` | Service Unavailable | External service (OpenAI) unavailable |
+
+### Error Response with Code
+
+Some endpoints include error codes for programmatic handling:
+
+```json
+{
+  "error": "owner and repo required for github-api mode",
+  "code": "MISSING_PARAMS"
+}
+```
+
+## Common Headers
+
+### Request Headers
+
+```http
+Content-Type: application/json
+Cookie: next-auth.session-token=...
+```
+
+### Response Headers
+
+```http
+Content-Type: application/json
+X-RateLimit-Limit: 5000
+X-RateLimit-Remaining: 4999
+X-RateLimit-Reset: 1234567890
+```
+
+### Streaming Endpoints (SSE)
+
+For Server-Sent Events endpoints like `/api/github/analyze/advanced/stream`:
+
+```http
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+X-Accel-Buffering: no
+```
+
+## Pagination
+
+Endpoints that return lists use cursor-based pagination:
+
+```json
+{
+  "repositories": [...],
+  "pagination": {
+    "page": 1,
+    "perPage": 30,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+<ParamField query="page" type="integer" default="1">
+  Page number to retrieve
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="30">
+  Number of items per page (max: 100)
+</ParamField>
+
+## Caching
+
+### Advanced Analysis Caching
+
+Advanced analysis endpoints use Next.js `unstable_cache` with:
+
+- **TTL:** 24 hours (86,400 seconds)
+- **Cache key:** Based on `owner`, `repo`, `branch`, `since`, `until`
+- **Cache tags:** `analysis-{owner}-{repo}-{branch}`
+
+### AI Report Caching
+
+AI-generated manager reports use in-memory caching:
+
+- **TTL:** 1 hour (3,600 seconds)
+- **Cache key:** Based on commit count and date range
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Repositories" icon="folder" href="/api-reference/repositories">
+    Fetch user repositories
+  </Card>
+  <Card title="Branches" icon="code-branch" href="/api-reference/branches">
+    List repository branches
+  </Card>
+  <Card title="Analysis" icon="chart-line" href="/api-reference/analyze">
+    Analyze repository contributions
+  </Card>
+  <Card title="AI Reports" icon="robot" href="/api-reference/ai-report">
+    Generate AI-powered insights
+  </Card>
+</CardGroup>

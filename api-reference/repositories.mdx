@@ -1,0 +1,246 @@
+---
+title: 'GET /api/github/repos'
+description: 'Fetch paginated list of repositories for authenticated user'
+---
+
+## Endpoint
+
+```
+GET /api/github/repos
+```
+
+Returns a paginated list of repositories for the authenticated user, including both public and private repositories based on OAuth scopes.
+
+## Authentication
+
+Requires valid NextAuth session with GitHub OAuth access token.
+
+## Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number to retrieve
+</ParamField>
+
+<ParamField query="per_page" type="integer" default="30">
+  Number of items per page. Maximum value is 100.
+</ParamField>
+
+<ParamField query="sort" type="string" default="updated">
+  Sort field for repositories.
+  
+  **Options:**
+  - `created` - Sort by creation date
+  - `updated` - Sort by last update date
+  - `pushed` - Sort by last push date
+  - `full_name` - Sort alphabetically by name
+</ParamField>
+
+<ParamField query="direction" type="string" default="desc">
+  Sort direction.
+  
+  **Options:**
+  - `asc` - Ascending order
+  - `desc` - Descending order
+</ParamField>
+
+## Response
+
+<ResponseField name="repositories" type="array">
+  Array of repository objects
+  
+  <Expandable title="Repository object">
+    <ResponseField name="id" type="number">
+      Unique repository ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Repository name
+    </ResponseField>
+    
+    <ResponseField name="full_name" type="string">
+      Full repository name including owner (e.g., `owner/repo`)
+    </ResponseField>
+    
+    <ResponseField name="description" type="string" optional>
+      Repository description
+    </ResponseField>
+    
+    <ResponseField name="html_url" type="string">
+      GitHub URL to the repository
+    </ResponseField>
+    
+    <ResponseField name="language" type="string" optional>
+      Primary programming language
+    </ResponseField>
+    
+    <ResponseField name="stargazers_count" type="number">
+      Number of stars
+    </ResponseField>
+    
+    <ResponseField name="forks_count" type="number">
+      Number of forks
+    </ResponseField>
+    
+    <ResponseField name="open_issues_count" type="number">
+      Number of open issues
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      ISO 8601 timestamp of creation
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="string">
+      ISO 8601 timestamp of last update
+    </ResponseField>
+    
+    <ResponseField name="private" type="boolean">
+      Whether the repository is private
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  Pagination metadata
+  
+  <Expandable title="Pagination details">
+    <ResponseField name="page" type="number">
+      Current page number
+    </ResponseField>
+    
+    <ResponseField name="perPage" type="number">
+      Items per page
+    </ResponseField>
+    
+    <ResponseField name="hasNext" type="boolean">
+      Whether there are more pages available
+    </ResponseField>
+    
+    <ResponseField name="hasPrev" type="boolean">
+      Whether previous pages exist
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl -X GET "https://your-domain.com/api/github/repos?page=1&per_page=30&sort=updated&direction=desc" \
+  -H "Cookie: next-auth.session-token=YOUR_SESSION_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('/api/github/repos?page=1&per_page=30&sort=updated&direction=desc', {
+  credentials: 'include'
+});
+
+const data = await response.json();
+console.log(data.repositories);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://your-domain.com/api/github/repos',
+    params={
+        'page': 1,
+        'per_page': 30,
+        'sort': 'updated',
+        'direction': 'desc'
+    },
+    cookies={'next-auth.session-token': 'YOUR_SESSION_TOKEN'}
+)
+
+data = response.json()
+print(data['repositories'])
+```
+
+## Example Response
+
+```json
+{
+  "repositories": [
+    {
+      "id": 123456789,
+      "name": "my-awesome-project",
+      "full_name": "username/my-awesome-project",
+      "description": "A GitHub contribution analytics dashboard",
+      "html_url": "https://github.com/username/my-awesome-project",
+      "language": "TypeScript",
+      "stargazers_count": 42,
+      "forks_count": 7,
+      "open_issues_count": 3,
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-03-01T14:22:00Z",
+      "private": false
+    },
+    {
+      "id": 987654321,
+      "name": "another-repo",
+      "full_name": "username/another-repo",
+      "description": null,
+      "html_url": "https://github.com/username/another-repo",
+      "language": "JavaScript",
+      "stargazers_count": 15,
+      "forks_count": 2,
+      "open_issues_count": 0,
+      "created_at": "2023-11-20T08:15:00Z",
+      "updated_at": "2024-02-28T16:45:00Z",
+      "private": true
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "perPage": 30,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+### 500 Internal Server Error
+
+```json
+{
+  "error": "Failed to fetch repositories"
+}
+```
+
+## Rate Limiting
+
+This endpoint consumes GitHub API quota. Rate limit headers are included in the response:
+
+```
+X-RateLimit-Limit: 5000
+X-RateLimit-Remaining: 4999
+X-RateLimit-Reset: 1234567890
+```
+
+## Implementation Details
+
+From `~/workspace/source/app/api/github/repos/route.ts:46-52`:
+
+```typescript
+const { data, headers } = await octokit.repos.listForAuthenticatedUser({
+  page,
+  per_page: perPage,
+  sort: sort as any,
+  direction: direction as any,
+  affiliation: 'owner,collaborator,organization_member',
+});
+```
+
+The endpoint fetches repositories where the user is:
+- Owner
+- Collaborator
+- Organization member

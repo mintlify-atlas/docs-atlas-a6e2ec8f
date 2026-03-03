@@ -1,0 +1,378 @@
+---
+title: Analysis modes
+description: Understand gitDash's four analysis modes and when to use each one for optimal insights
+---
+
+gitDash supports four distinct analysis modes, each optimized for different use cases. Choose the right mode based on your needs for accuracy, speed, and data depth.
+
+## Available modes
+
+<Card title="Blame mode" icon="check-circle">
+  **True line-level code ownership**
+  
+  The most accurate attribution method using `git blame` to track who currently owns each line of code.
+</Card>
+
+<Card title="Commits mode" icon="git-commit">
+  **Activity-based analysis**
+  
+  Analyzes commit frequency and changes over time, excluding merge commits.
+</Card>
+
+<Card title="GitHub API mode" icon="github">
+  **Metadata and pull requests**
+  
+  Fast analysis using GitHub's API to fetch contributor metadata and PR statistics.
+</Card>
+
+<Card title="Hybrid mode" icon="layers">
+  **Combined comprehensive analysis**
+  
+  Combines all three methods for the most complete view of repository activity.
+</Card>
+
+## Mode configuration types
+
+```typescript lib/analysis-modes.ts
+export type AnalysisMode = "blame" | "commits" | "github-api" | "hybrid";
+
+export type AnalysisConfig = {
+  mode: AnalysisMode;
+  repoPath?: string;
+  blameOptions?: BlameOptions;
+  commitOptions?: CommitOptions;
+  githubOptions?: GitHubOptions;
+};
+```
+
+## Blame mode
+
+### Overview
+
+Blame mode uses Git's `git blame` command to determine true line ownership. This is the **most accurate** method for attribution.
+
+<Info>
+Blame mode is recommended for most analyses because it accurately reflects current code ownership, not just commit history.
+</Info>
+
+### When to use
+
+- **Code ownership audits**: Determine who owns which parts of the codebase
+- **Refactoring analysis**: Track line-level changes across rewrites
+- **Accurate metrics**: Get precise attribution excluding merge commits
+- **Long-lived projects**: Understand current code ownership vs historical contributions
+
+### Blame options
+
+```typescript
+export type BlameOptions = {
+  ignoreWhitespace?: boolean;     // Ignore whitespace-only changes
+  detectMoves?: boolean;           // Track code moves within files
+  detectCopies?: boolean;          // Track code copied between files
+  useMailmap?: boolean;            // Use .mailmap for author consolidation
+  respectIgnoreRevs?: boolean;     // Honor .git-blame-ignore-revs
+  maxConcurrency?: number;         // Parallel blame operations
+};
+```
+
+### Advantages
+
+<Tabs>
+  <Tab title="Accuracy">
+    - True line-level attribution
+    - Ignores merge commits automatically
+    - Tracks code moves and renames
+    - Respects authorship through refactors
+  </Tab>
+  
+  <Tab title="Features">
+    - Detects code copied between files
+    - Uses mailmap for author consolidation
+    - Honors .git-blame-ignore-revs
+    - Parallel processing for speed
+  </Tab>
+</Tabs>
+
+### Limitations
+
+<Warning>
+Blame mode requires local repository access and can be slower for large codebases.
+</Warning>
+
+- Requires local git repository
+- Slower than API-based modes
+- Cannot analyze remote-only repositories
+- Memory intensive for very large repos
+
+## Commits mode
+
+### Overview
+
+Commits mode analyzes commit history to track activity patterns and contribution frequency.
+
+### When to use
+
+- **Activity timelines**: Visualize when developers are most active
+- **Contribution patterns**: Understand commit frequency over time
+- **Team velocity**: Measure development pace
+- **Historical analysis**: Review past contribution trends
+
+### Commit options
+
+```typescript
+export type CommitOptions = {
+  excludeMerges?: boolean;    // Skip merge commits (recommended)
+  since?: string;             // Start date (ISO 8601)
+  until?: string;             // End date (ISO 8601)
+  branch?: string;            // Specific branch to analyze
+};
+```
+
+### Configuration example
+
+```tsx
+<AnalysisModeSelector
+  mode="commits"
+  config={{
+    mode: "commits",
+    commitOptions: {
+      excludeMerges: true,
+      since: "2024-01-01",
+      until: "2024-12-31",
+      branch: "main"
+    }
+  }}
+/>
+```
+
+### Advantages
+
+- Fast analysis
+- No local repository required
+- Good for time-based insights
+- Excludes merge noise with `--no-merges`
+
+### Metrics provided
+
+<Accordion title="Commit frequency">
+  Number of commits per author over time periods.
+</Accordion>
+
+<Accordion title="Lines changed per commit">
+  Additions and deletions tracked at commit level.
+</Accordion>
+
+<Accordion title="Active days">
+  Days between first and last commit for each contributor.
+</Accordion>
+
+## GitHub API mode
+
+### Overview
+
+GitHub API mode uses GitHub's REST API to fetch repository metadata, pull requests, and contributor statistics.
+
+### When to use
+
+- **Quick analysis**: Fast results without local clone
+- **PR tracking**: Analyze pull request activity
+- **Public repositories**: No authentication required for public repos
+- **Contributor lists**: Get GitHub usernames and avatars
+
+### GitHub options
+
+```typescript
+export type GitHubOptions = {
+  owner: string;      // Repository owner (username or org)
+  repo: string;       // Repository name
+  token?: string;     // GitHub PAT (optional for public repos)
+};
+```
+
+### API endpoints used
+
+- `GET /repos/{owner}/{repo}/commits` - Commit history
+- `GET /repos/{owner}/{repo}/contributors` - Contributor list
+- `GET /repos/{owner}/{repo}/pulls` - Pull requests
+- `GET /repos/{owner}/{repo}/stats/contributors` - Contribution stats
+
+### Advantages
+
+- **Fastest mode**: No local operations
+- **No clone required**: Works with any GitHub repo
+- **Rich metadata**: GitHub usernames, avatars, PR data
+- **Rate limit aware**: Handles API throttling
+
+### Limitations
+
+<Warning>
+GitHub API has rate limits: 5,000 requests/hour (authenticated) or 60 requests/hour (unauthenticated).
+</Warning>
+
+- Rate limiting for large repositories
+- Requires network connection
+- May miss local-only commits
+- Limited to GitHub-hosted repositories
+
+## Hybrid mode
+
+### Overview
+
+Hybrid mode combines all three analysis methods for the most comprehensive view.
+
+### When to use
+
+- **Complete analysis**: Maximum insight depth
+- **Comparison**: Cross-validate different attribution methods
+- **Management reports**: Executive summaries need all data
+- **Team health**: Holistic view of repository activity
+
+### What hybrid includes
+
+<Tabs>
+  <Tab title="From Blame">
+    - True line ownership
+    - Current code attribution
+    - Refactoring tracking
+  </Tab>
+  
+  <Tab title="From Commits">
+    - Activity timelines
+    - Commit frequency
+    - Historical patterns
+  </Tab>
+  
+  <Tab title="From GitHub API">
+    - Pull request data
+    - Contributor metadata
+    - GitHub-specific stats
+  </Tab>
+</Tabs>
+
+### Configuration
+
+```typescript
+const hybridConfig: AnalysisConfig = {
+  mode: "hybrid",
+  repoPath: "/path/to/repo",
+  blameOptions: {
+    ignoreWhitespace: true,
+    detectMoves: true
+  },
+  commitOptions: {
+    excludeMerges: true,
+    since: "2024-01-01"
+  },
+  githubOptions: {
+    owner: "octocat",
+    repo: "hello-world",
+    token: process.env.GITHUB_TOKEN
+  }
+};
+```
+
+### Advantages
+
+- Most complete data set
+- Cross-validation between methods
+- Best for comprehensive reports
+- Identifies discrepancies between methods
+
+### Trade-offs
+
+- Slowest analysis mode
+- Requires all prerequisites (local repo + GitHub access)
+- Higher resource usage
+- Most complex configuration
+
+## Mode selector UI
+
+The `AnalysisModeSelector` component provides an interactive interface for mode selection.
+
+```tsx components/AnalysisModeSelector.tsx
+<select value={mode} onChange={e => setMode(e.target.value)}>
+  <option value="blame">Blame - True Line Ownership (Recommended)</option>
+  <option value="commits">Commits - Activity Analysis (No Merges)</option>
+  <option value="github-api">GitHub API - Metadata Only</option>
+  <option value="hybrid">Hybrid - All Combined</option>
+</select>
+```
+
+### Mode descriptions in UI
+
+<Accordion title="Blame mode">
+  ✅ Accurate line-level attribution, ignores merges
+  
+  - True line-level code ownership
+  - Ignores merge commits automatically
+  - Detects code moves and renames
+  - Most accurate attribution method
+</Accordion>
+
+<Accordion title="Commits mode">
+  Commit frequency and activity over time
+  
+  - Excludes merge commits (--no-merges)
+  - Shows commit frequency per author
+  - Tracks additions/deletions per commit
+  - Good for activity timelines
+</Accordion>
+
+<Accordion title="GitHub API mode">
+  Pull requests, issues, and contributors
+  
+  - Pull requests count and status
+  - Issues tracking
+  - GitHub contributors list
+  - Fast, no local repo needed
+</Accordion>
+
+<Accordion title="Hybrid mode">
+  Complete analysis with all methods
+  
+  - Complete analysis with all methods
+  - Line ownership + commit activity
+  - GitHub metadata included
+  - Most comprehensive view
+</Accordion>
+
+## Performance comparison
+
+<Note>
+Performance benchmarks based on a repository with 10,000 commits and 100 contributors.
+</Note>
+
+| Mode | Speed | Accuracy | Local Repo | GitHub Access |
+|------|-------|----------|------------|---------------|
+| Blame | Slow (5-10 min) | Highest | Required | Optional |
+| Commits | Medium (1-2 min) | Medium | Required | Optional |
+| GitHub API | Fast (10-30 sec) | Medium | Not needed | Required |
+| Hybrid | Slowest (10-15 min) | Highest | Required | Required |
+
+## Choosing the right mode
+
+<Tabs>
+  <Tab title="For code ownership">
+    **Use Blame mode**
+    
+    When you need to know who currently owns each line of code.
+  </Tab>
+  
+  <Tab title="For activity tracking">
+    **Use Commits mode**
+    
+    When analyzing team velocity and contribution patterns over time.
+  </Tab>
+  
+  <Tab title="For quick insights">
+    **Use GitHub API mode**
+    
+    When you need fast results without local repository access.
+  </Tab>
+  
+  <Tab title="For comprehensive reports">
+    **Use Hybrid mode**
+    
+    When preparing executive summaries or detailed team health reports.
+  </Tab>
+</Tabs>

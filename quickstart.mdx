@@ -1,80 +1,212 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get from zero to your first GitHub contribution analysis in under 5 minutes
 ---
 
-## Get started in three steps
+# Quick start
 
-Get your documentation site running locally and make your first customization.
+This guide walks you through setting up gitDash and running your first contribution analysis.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+Before you begin, ensure you have:
 
-### Step 2: Deploy your changes
+- **Node.js 18+** installed on your machine
+- A **GitHub account** with access to repositories you want to analyze
+- **(Optional)** OpenAI API key for AI Manager Report feature
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Setup steps
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Steps>
+  <Step title="Create GitHub OAuth App">
+    Create a GitHub OAuth application to enable authentication:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+    2. Click **New OAuth App**
+    3. Fill in the application details:
+       - **Application name**: `gitDash` (or your preferred name)
+       - **Homepage URL**: `http://localhost:3000`
+       - **Authorization callback URL**: `http://localhost:3000/api/auth/callback/github`
+    4. Click **Register application**
+    5. Copy the **Client ID**
+    6. Click **Generate a new client secret** and copy the secret
 
-### Step 3: Go live
+    <Warning>
+      Keep your Client Secret secure. Never commit it to version control or share it publicly.
+    </Warning>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    <Note>
+      For production deployments, you'll need to create a separate OAuth app with your production URL as the callback.
+    </Note>
+  </Step>
 
-## Next steps
+  <Step title="Clone and install dependencies">
+    Clone the gitDash repository and install dependencies:
 
-Now that you have your docs running, explore these key features:
+    ```bash
+    git clone <your-gitdash-repo-url>
+    cd gitdash
+    npm install
+    ```
+
+    This installs all required packages including Next.js, Auth.js, Octokit, and Chart.js.
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env.local` file in the root directory with your credentials:
+
+    ```bash
+    cp .env.example .env.local
+    ```
+
+    Edit `.env.local` and add your configuration:
+
+    <CodeGroup>
+    ```bash .env.local
+    # GitHub OAuth App Configuration
+    # From the OAuth app you created in Step 1
+    GITHUB_CLIENT_ID=your_github_client_id_here
+    GITHUB_CLIENT_SECRET=your_github_client_secret_here
+
+    # NextAuth.js Configuration
+    # Generate with: openssl rand -base64 32
+    AUTH_SECRET=your_random_secret_here
+
+    # Application URL
+    NEXTAUTH_URL=http://localhost:3000
+
+    # OpenAI Configuration (Optional)
+    # Required only for AI Manager Report feature
+    OPENAI_API_KEY=your_openai_api_key_here
+    ```
+
+    ```bash Generate AUTH_SECRET
+    # Generate a secure random secret
+    openssl rand -base64 32
+    ```
+    </CodeGroup>
+
+    ### Required environment variables
+
+    | Variable | Description | Example |
+    |----------|-------------|----------|
+    | `GITHUB_CLIENT_ID` | OAuth App Client ID from GitHub | `Iv1.a1b2c3d4e5f6g7h8` |
+    | `GITHUB_CLIENT_SECRET` | OAuth App Client Secret from GitHub | `a1b2c3d4e5f6...` |
+    | `AUTH_SECRET` | Random secret for JWT signing | Generate with openssl |
+    | `NEXTAUTH_URL` | Your application URL | `http://localhost:3000` |
+
+    ### Optional environment variables
+
+    | Variable | Description | Required for |
+    |----------|-------------|-------------|
+    | `OPENAI_API_KEY` | OpenAI API key | AI Manager Report feature |
+
+    <Warning>
+      Never commit `.env.local` to version control. It's already in `.gitignore` by default.
+    </Warning>
+  </Step>
+
+  <Step title="Run the development server">
+    Start the Next.js development server:
+
+    ```bash
+    npm run dev
+    ```
+
+    The application will be available at [http://localhost:3000](http://localhost:3000).
+
+    <Note>
+      The first build may take a minute. Subsequent starts will be faster with Next.js caching.
+    </Note>
+  </Step>
+
+  <Step title="Sign in and run your first analysis">
+    1. Open [http://localhost:3000](http://localhost:3000) in your browser
+    2. Click **Sign in with GitHub**
+    3. Authorize the application when prompted
+    4. Navigate to the dashboard at `/dashboard/analyze`
+    5. Select a repository and branch
+    6. Choose an analysis mode:
+       - **Blame**: Most accurate for code ownership
+       - **Commits**: Good for activity timelines
+       - **GitHub API**: Fast metadata-only analysis
+       - **Hybrid**: Complete analysis with all data sources
+    7. Click **Start Analysis** and watch the progress
+
+    <Note>
+      For local git modes (blame, commits, hybrid), you'll need to provide the absolute path to a local clone of the repository.
+    </Note>
+  </Step>
+</Steps>
+
+## What's next?
+
+Now that you've run your first analysis, explore these features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Understanding analysis modes" href="/features/analysis-modes">
+    Learn when to use blame, commits, GitHub API, or hybrid mode
+  </Card>
+  
+  <Card title="Dashboard features" href="/features/dashboard">
+    Discover all visualizations and metrics available
+  </Card>
+  
+  <Card title="Authentication details" href="/authentication">
+    Learn about OAuth scopes and security considerations
+  </Card>
+  
+  <Card title="API endpoints" href="/api-reference/overview">
+    Integrate gitDash APIs into your workflows
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Troubleshooting
+
+### Authentication fails
+
+- Verify your `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are correct
+- Check that the callback URL matches exactly: `http://localhost:3000/api/auth/callback/github`
+- Ensure `AUTH_SECRET` is set and is a strong random string
+- Clear browser cookies and try again
+
+### Build errors
+
+- Confirm Node.js version is 18 or higher: `node --version`
+- Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
+- Run type checking to identify issues: `npm run type-check`
+
+### Rate limiting
+
+- GitHub API has a limit of 5,000 authenticated requests per hour
+- Large repositories may require multiple requests
+- Wait for the rate limit to reset (shown in error message)
+- Consider using local git modes (blame, commits) which don't count against API limits
+
+## Development commands
+
+```bash
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm run start
+
+# Run type checking
+npm run type-check
+
+# Run linting
+npm run lint
+
+# Run tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+```

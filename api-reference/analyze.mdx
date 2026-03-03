@@ -1,0 +1,472 @@
+---
+title: 'POST /api/github/analyze'
+description: 'Analyze repository contributions with multiple analysis modes'
+---
+
+## Endpoint
+
+```
+POST /api/github/analyze
+```
+
+Analyzes repository contributions using various methods. Supports multiple analysis modes including blame-based attribution, commit statistics, GitHub API metadata, and hybrid analysis.
+
+## Authentication
+
+Requires valid NextAuth session with GitHub OAuth access token.
+
+## Analysis Modes
+
+The endpoint supports five different modes:
+
+1. **`blame`** - True line-level code ownership (requires local repository)
+2. **`commits`** - Commit activity analysis with `--no-merges` (requires local repository)
+3. **`github-api`** - GitHub metadata only (PRs, issues, contributors)
+4. **`hybrid`** - Combines all of the above
+5. **Legacy mode** (default) - Original GitHub API commit analysis
+
+## Request Body
+
+### Blame Mode
+
+<ParamField body="mode" type="string" required>
+  Set to `"blame"`
+</ParamField>
+
+<ParamField body="repoPath" type="string" required>
+  Local filesystem path to the git repository
+</ParamField>
+
+<ParamField body="blameOptions" type="object">
+  Optional blame configuration
+  
+  <Expandable title="Blame options">
+    <ParamField body="maxConcurrency" type="number">
+      Maximum concurrent file processing
+    </ParamField>
+    
+    <ParamField body="respectIgnoreRevs" type="boolean" default={true}>
+      Respect `.git-blame-ignore-revs` file
+    </ParamField>
+    
+    <ParamField body="ignoreWhitespace" type="boolean" default={true}>
+      Ignore whitespace changes
+    </ParamField>
+    
+    <ParamField body="detectMoves" type="boolean" default={true}>
+      Detect moved code blocks
+    </ParamField>
+    
+    <ParamField body="detectCopies" type="boolean" default={true}>
+      Detect copied code blocks
+    </ParamField>
+    
+    <ParamField body="useMailmap" type="boolean" default={true}>
+      Use `.mailmap` for author attribution
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Commits Mode
+
+<ParamField body="mode" type="string" required>
+  Set to `"commits"`
+</ParamField>
+
+<ParamField body="repoPath" type="string" required>
+  Local filesystem path to the git repository
+</ParamField>
+
+<ParamField body="commitOptions" type="object">
+  Optional commit analysis configuration
+  
+  <Expandable title="Commit options">
+    <ParamField body="excludeMerges" type="boolean" default={true}>
+      Exclude merge commits from analysis
+    </ParamField>
+    
+    <ParamField body="since" type="string">
+      Start date (ISO format)
+    </ParamField>
+    
+    <ParamField body="until" type="string">
+      End date (ISO format)
+    </ParamField>
+    
+    <ParamField body="branch" type="string">
+      Specific branch to analyze
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### GitHub API Mode
+
+<ParamField body="mode" type="string" required>
+  Set to `"github-api"`
+</ParamField>
+
+<ParamField body="githubOptions" type="object" required>
+  GitHub repository configuration
+  
+  <Expandable title="GitHub options">
+    <ParamField body="owner" type="string" required>
+      Repository owner
+    </ParamField>
+    
+    <ParamField body="repo" type="string" required>
+      Repository name
+    </ParamField>
+    
+    <ParamField body="token" type="string">
+      Optional GitHub token (uses session token if not provided)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Hybrid Mode
+
+<ParamField body="mode" type="string" required>
+  Set to `"hybrid"`
+</ParamField>
+
+<ParamField body="repoPath" type="string" required>
+  Local filesystem path to the git repository
+</ParamField>
+
+<ParamField body="githubOptions" type="object" required>
+  GitHub repository configuration (same as GitHub API mode)
+</ParamField>
+
+<ParamField body="blameOptions" type="object">
+  Optional blame configuration
+</ParamField>
+
+<ParamField body="commitOptions" type="object">
+  Optional commit configuration
+</ParamField>
+
+### Legacy Mode
+
+<ParamField body="owner" type="string" required>
+  Repository owner
+</ParamField>
+
+<ParamField body="repo" type="string" required>
+  Repository name
+</ParamField>
+
+<ParamField body="branch" type="string" required>
+  Branch name to analyze
+</ParamField>
+
+<ParamField body="includeBots" type="boolean" default={false}>
+  Include bot commits in analysis
+</ParamField>
+
+## Response Formats
+
+### Blame Mode Response
+
+<ResponseField name="mode" type="string">
+  Returns `"blame"`
+</ResponseField>
+
+<ResponseField name="repoPath" type="string">
+  Path that was analyzed
+</ResponseField>
+
+<ResponseField name="filesProcessed" type="number">
+  Number of files analyzed
+</ResponseField>
+
+<ResponseField name="totalLines" type="number">
+  Total lines of code processed
+</ResponseField>
+
+<ResponseField name="authors" type="array">
+  Line ownership by author
+</ResponseField>
+
+### Commits Mode Response
+
+<ResponseField name="mode" type="string">
+  Returns `"commits"`
+</ResponseField>
+
+<ResponseField name="repoPath" type="string">
+  Path that was analyzed
+</ResponseField>
+
+<ResponseField name="authors" type="array">
+  Commit statistics by author
+</ResponseField>
+
+<ResponseField name="timeline" type="object">
+  Temporal commit distribution
+</ResponseField>
+
+### GitHub API Mode Response
+
+<ResponseField name="mode" type="string">
+  Returns `"github-api"`
+</ResponseField>
+
+<ResponseField name="pullRequests" type="number">
+  Total pull request count
+</ResponseField>
+
+<ResponseField name="issues" type="number">
+  Total issue count
+</ResponseField>
+
+<ResponseField name="contributors" type="array">
+  GitHub contributors with contribution counts
+</ResponseField>
+
+### Hybrid Mode Response
+
+<ResponseField name="mode" type="string">
+  Returns `"hybrid"`
+</ResponseField>
+
+<ResponseField name="lineOwnership" type="array">
+  Authors by lines owned (from blame)
+</ResponseField>
+
+<ResponseField name="totalLines" type="number">
+  Total lines analyzed
+</ResponseField>
+
+<ResponseField name="filesProcessed" type="number">
+  Files processed
+</ResponseField>
+
+<ResponseField name="commitActivity" type="array">
+  Authors by commit count
+</ResponseField>
+
+<ResponseField name="timeline" type="object">
+  Commit timeline data
+</ResponseField>
+
+<ResponseField name="pullRequests" type="number">
+  Total PRs from GitHub API
+</ResponseField>
+
+### Legacy Mode Response
+
+<ResponseField name="contributors" type="array">
+  Contributor statistics
+</ResponseField>
+
+<ResponseField name="commitMessages" type="array">
+  All commit messages
+</ResponseField>
+
+<ResponseField name="commitTimes" type="array">
+  Commit timestamp distribution
+</ResponseField>
+
+<ResponseField name="filesByAuthor" type="array">
+  Files changed by each author
+</ResponseField>
+
+<ResponseField name="merges" type="array">
+  Merge commit information
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Analysis metadata
+  
+  <Expandable title="Metadata fields">
+    <ResponseField name="totalCommits" type="number">
+      Total commits in branch
+    </ResponseField>
+    
+    <ResponseField name="analyzedCommits" type="number">
+      Commits included in analysis
+    </ResponseField>
+    
+    <ResponseField name="totalContributors" type="number">
+      Unique contributor count
+    </ResponseField>
+    
+    <ResponseField name="dateRange" type="object">
+      Start and end dates
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="exports" type="object">
+  Pre-formatted export data
+  
+  <Expandable title="Export formats">
+    <ResponseField name="contributorsCSV" type="string">
+      CSV format contributor data
+    </ResponseField>
+    
+    <ResponseField name="commitMessagesText" type="string">
+      Plain text commit messages
+    </ResponseField>
+    
+    <ResponseField name="commitTimesText" type="string">
+      Formatted commit timeline
+    </ResponseField>
+    
+    <ResponseField name="filesByAuthorText" type="string">
+      File attribution text
+    </ResponseField>
+    
+    <ResponseField name="mergesText" type="string">
+      Merge commit summary
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Requests
+
+### Blame Mode
+
+```bash cURL
+curl -X POST "https://your-domain.com/api/github/analyze" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=YOUR_SESSION_TOKEN" \
+  -d '{
+    "mode": "blame",
+    "repoPath": "/path/to/repository"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('/api/github/analyze', {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    mode: 'blame',
+    repoPath: '/path/to/repository',
+    blameOptions: {
+      ignoreWhitespace: true,
+      detectMoves: true
+    }
+  })
+});
+
+const data = await response.json();
+```
+
+### Legacy Mode
+
+```bash cURL
+curl -X POST "https://your-domain.com/api/github/analyze" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=YOUR_SESSION_TOKEN" \
+  -d '{
+    "owner": "octocat",
+    "repo": "hello-world",
+    "branch": "main",
+    "includeBots": false
+  }'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-domain.com/api/github/analyze',
+    json={
+        'owner': 'octocat',
+        'repo': 'hello-world',
+        'branch': 'main',
+        'includeBots': False
+    },
+    cookies={'next-auth.session-token': 'YOUR_SESSION_TOKEN'}
+)
+
+data = response.json()
+print(f"Analyzed {data['metadata']['analyzedCommits']} commits")
+```
+
+## Example Response (Legacy Mode)
+
+```json
+{
+  "contributors": [
+    {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "commits": 142,
+      "additions": 5420,
+      "deletions": 1230,
+      "netLines": 4190
+    }
+  ],
+  "commitMessages": [
+    {
+      "sha": "abc123",
+      "author": "John Doe",
+      "message": "feat: add new dashboard component",
+      "date": "2024-03-01T10:30:00Z"
+    }
+  ],
+  "metadata": {
+    "totalCommits": 523,
+    "analyzedCommits": 523,
+    "totalContributors": 8,
+    "dateRange": {
+      "start": "2023-01-15T08:00:00Z",
+      "end": "2024-03-03T14:22:00Z"
+    }
+  },
+  "exports": {
+    "contributorsCSV": "Name,Email,Commits,Additions,Deletions\nJohn Doe,john@example.com,142,5420,1230\n",
+    "commitMessagesText": "...",
+    "commitTimesText": "...",
+    "filesByAuthorText": "...",
+    "mergesText": "..."
+  }
+}
+```
+
+## Error Responses
+
+### 400 Bad Request
+
+```json
+{
+  "error": "repoPath is required for blame mode"
+}
+```
+
+```json
+{
+  "error": "Missing required parameters: owner, repo, and branch"
+}
+```
+
+### 401 Unauthorized
+
+```json
+{
+  "error": "Unauthorized"
+}
+```
+
+### 500 Internal Server Error
+
+```json
+{
+  "error": "Failed to analyze repository"
+}
+```
+
+## Performance Notes
+
+- **Legacy mode**: Fetches up to 5,000 commits per request
+- **Blame mode**: Processes files concurrently for performance
+- **Hybrid mode**: Runs all analyses in parallel
+- Large repositories may take several minutes to analyze
+
+## Implementation Reference
+
+See `~/workspace/source/app/api/github/analyze/route.ts` for full implementation details.

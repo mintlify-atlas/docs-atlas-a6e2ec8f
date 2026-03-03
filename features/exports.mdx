@@ -1,0 +1,485 @@
+---
+title: Exports
+description: Export repository analysis data as CSV and text files for external reporting and analysis
+---
+
+gitDash provides comprehensive export functionality to save analysis results in portable formats for reporting, archiving, and external processing.
+
+## Export formats
+
+<CardGroup cols={2}>
+  <Card title="CSV exports" icon="table">
+    Structured CSV files for spreadsheet analysis and data processing.
+  </Card>
+  
+  <Card title="Text exports" icon="file-text">
+    Plain text exports for commit messages, times, files, and merges.
+  </Card>
+</CardGroup>
+
+## CSV exports
+
+### Contributors CSV
+
+Export complete contributor statistics to CSV format.
+
+**Location:** `lib/analysis.ts`
+
+```typescript
+export function serializeContributorsCSV(contributors: ContributorStats[]): string {
+  const headers = [
+    'Name',
+    'Email',
+    'GitHub ID',
+    'GitHub Login',
+    'Commit Count',
+    'Additions',
+    'Deletions',
+    'Net Lines',
+    'First Commit',
+    'Last Commit',
+    'Active Days',
+    'Has Merges'
+  ];
+
+  const rows = contributors.map(c => [
+    escapeCSV(c.name),
+    escapeCSV(c.email),
+    c.githubId?.toString() || '',
+    c.githubLogin || '',
+    c.commitCount.toString(),
+    c.additions.toString(),
+    c.deletions.toString(),
+    c.netLines.toString(),
+    c.firstCommitDate || '',
+    c.lastCommitDate || '',
+    c.activeDays.toString(),
+    c.isMergeCommitter ? 'Yes' : 'No'
+  ]);
+
+  return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+}
+```
+
+### CSV structure
+
+<Tabs>
+  <Tab title="Headers">
+    The CSV includes these columns:
+    
+    - **Name**: Contributor display name
+    - **Email**: Primary email address
+    - **GitHub ID**: Numeric GitHub user ID
+    - **GitHub Login**: GitHub username
+    - **Commit Count**: Total number of commits
+    - **Additions**: Total lines added
+    - **Deletions**: Total lines removed
+    - **Net Lines**: Net change (additions - deletions)
+    - **First Commit**: ISO 8601 date of first commit
+    - **Last Commit**: ISO 8601 date of most recent commit
+    - **Active Days**: Days between first and last commit
+    - **Has Merges**: "Yes" if contributor has merge commits
+  </Tab>
+  
+  <Tab title="Example output">
+    ```csv
+    Name,Email,GitHub ID,GitHub Login,Commit Count,Additions,Deletions,Net Lines,First Commit,Last Commit,Active Days,Has Merges
+    John Doe,john@example.com,12345,johndoe,247,15234,3421,11813,2024-01-15,2024-12-10,329,Yes
+    Jane Smith,jane@example.com,67890,janesmith,189,9876,2341,7535,2024-02-01,2024-12-08,311,No
+    "Wilson, Bob",bob@example.com,11111,bobwilson,156,12456,5678,6778,2024-01-20,2024-11-30,314,Yes
+    ```
+  </Tab>
+</Tabs>
+
+### CSV escaping
+
+Proper escaping ensures data integrity:
+
+```typescript
+function escapeCSV(value: string | null | undefined): string {
+  if (!value) return '';
+  
+  // Check if value needs quoting (contains comma, quote, or newline)
+  const needsQuotes = /[,"\n\r]/.test(value);
+  
+  if (needsQuotes) {
+    // Escape quotes by doubling them
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  
+  return value;
+}
+```
+
+<Info>
+CSV escaping follows RFC 4180 standards for maximum compatibility with spreadsheet applications.
+</Info>
+
+**Examples:**
+
+| Input | Output |
+|-------|--------|
+| `John Doe` | `John Doe` |
+| `Doe, John` | `"Doe, John"` |
+| `John "The Boss" Doe` | `"John ""The Boss"" Doe"` |
+| `Line 1\nLine 2` | `"Line 1\nLine 2"` |
+
+## Text exports
+
+### Commit messages export
+
+Export all commit messages in a structured text format.
+
+```typescript
+export function serializeCommitMessages(messages: CommitMessage[]): string {
+  return messages
+    .map(m => `${m.sha.substring(0, 7)} | ${m.author} | ${m.date} | ${m.message}`)
+    .join('\n');
+}
+```
+
+**Schema:**
+
+```typescript
+export const CommitMessageSchema = z.object({
+  sha: z.string(),
+  author: z.string(),
+  date: z.string(),
+  message: z.string()  // First line only
+});
+```
+
+**Example output:**
+
+```text
+a1b2c3d | johndoe | 2024-12-10T15:30:00Z | feat: add user authentication
+e4f5g6h | janesmith | 2024-12-10T14:20:00Z | fix: resolve login bug
+i7j8k9l | bobwilson | 2024-12-10T13:10:00Z | docs: update README
+```
+
+### Commit times export
+
+Export commit timestamps for temporal analysis.
+
+```typescript
+export function serializeCommitTimes(times: CommitTime[]): string {
+  return times
+    .map(t => `${t.sha.substring(0, 7)} | ${t.author} | ${t.date} | ${t.timestamp}`)
+    .join('\n');
+}
+```
+
+**Schema:**
+
+```typescript
+export const CommitTimeSchema = z.object({
+  sha: z.string(),
+  author: z.string(),
+  date: z.string(),
+  timestamp: z.number()  // Unix timestamp in milliseconds
+});
+```
+
+**Example output:**
+
+```text
+a1b2c3d | johndoe | 2024-12-10T15:30:00Z | 1702224600000
+e4f5g6h | janesmith | 2024-12-10T14:20:00Z | 1702220400000
+i7j8k9l | bobwilson | 2024-12-10T13:10:00Z | 1702216200000
+```
+
+### Files by author export
+
+Export file changes grouped by author.
+
+```typescript
+export function serializeFilesByAuthor(files: FileByAuthor[]): string {
+  return files
+    .map(f => `${f.author} | ${f.filename} | +${f.additions} -${f.deletions} (${f.changes})`)
+    .join('\n');
+}
+```
+
+**Schema:**
+
+```typescript
+export const FileByAuthorSchema = z.object({
+  author: z.string(),
+  filename: z.string(),
+  additions: z.number(),
+  deletions: z.number(),
+  changes: z.number()
+});
+```
+
+<Note>
+Very large files (>10,000 changes) are excluded to prevent binary file noise.
+</Note>
+
+**Example output:**
+
+```text
+johndoe | src/auth.ts | +127 -34 (161)
+johndoe | src/utils/validate.ts | +45 -12 (57)
+janesmith | src/components/Login.tsx | +234 -89 (323)
+bobwilson | README.md | +28 -5 (33)
+```
+
+### Merge commits export
+
+Export all merge commit information.
+
+```typescript
+export function serializeMerges(merges: MergeCommit[]): string {
+  return merges
+    .map(m => `${m.sha.substring(0, 7)} | ${m.author} | ${m.date} | Parents: ${m.parentCount} | ${m.message}`)
+    .join('\n');
+}
+```
+
+**Schema:**
+
+```typescript
+export const MergeCommitSchema = z.object({
+  sha: z.string(),
+  author: z.string(),
+  date: z.string(),
+  message: z.string(),
+  parentCount: z.number()  // Number of parent commits (>1 for merges)
+});
+```
+
+**Example output:**
+
+```text
+m1n2o3p | johndoe | 2024-12-10T16:00:00Z | Parents: 2 | Merge pull request #123 from feature/auth
+q4r5s6t | janesmith | 2024-12-09T18:30:00Z | Parents: 2 | Merge branch 'develop' into main
+```
+
+## Download implementation
+
+### Client-side download
+
+Implement CSV download in the browser:
+
+```typescript app/dashboard/repo/[owner]/[repo]/branch/[branch]/page.tsx
+const handleDownloadCSV = (type: "contributors" | "commits") => {
+  if (analysisState.status !== "complete") {
+    console.warn("Cannot download CSV: Analysis not complete");
+    return;
+  }
+
+  try {
+    // Get the appropriate CSV data
+    const csv = type === "contributors"
+      ? analysisState.data.exports.contributorsCSV
+      : analysisState.data.exports.commitTimesText;
+
+    if (!csv || typeof csv !== "string") {
+      alert("CSV data is not available for download");
+      return;
+    }
+
+    // Generate filename with timestamp
+    const safeBranchName = decodedBranch.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const timestamp = new Date().toISOString().split("T")[0];
+    const filename = `${owner}-${repo}-${safeBranchName}-${type}-${timestamp}.csv`;
+
+    // Create blob and download
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+
+    // Cleanup
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch (error) {
+    console.error("Failed to download CSV:", error);
+    alert("Failed to download CSV. Please try again.");
+  }
+};
+```
+
+### Download UI
+
+```tsx
+<Card>
+  <CardHeader>
+    <div className="flex items-center justify-between">
+      <div>
+        <h3 className="text-lg font-semibold">Export Analysis Data</h3>
+        <p className="text-sm text-gray-600">Download contributor and commit data as CSV files</p>
+      </div>
+      <div className="flex gap-3">
+        <Button
+          onClick={() => handleDownloadCSV("contributors")}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          <Download className="w-4 h-4" />
+          Contributors CSV
+        </Button>
+        <Button
+          onClick={() => handleDownloadCSV("commits")}
+          variant="outline"
+          size="sm"
+          className="gap-2"
+        >
+          <Download className="w-4 h-4" />
+          Commits CSV
+        </Button>
+      </div>
+    </div>
+  </CardHeader>
+</Card>
+```
+
+## Export data structure
+
+The analysis result includes all export formats:
+
+```typescript
+export const AnalysisResultSchema = z.object({
+  contributors: z.array(ContributorStatsSchema),
+  commitMessages: z.array(CommitMessageSchema),
+  commitTimes: z.array(CommitTimeSchema),
+  filesByAuthor: z.array(FileByAuthorSchema),
+  merges: z.array(MergeCommitSchema),
+  warnings: z.array(z.string()),
+  metadata: z.object({
+    totalCommits: z.number(),
+    analyzedCommits: z.number(),
+    totalContributors: z.number(),
+    dateRange: z.object({
+      start: z.string().nullable(),
+      end: z.string().nullable()
+    })
+  })
+});
+```
+
+## Filename conventions
+
+<Tabs>
+  <Tab title="Contributors CSV">
+    Format: `{owner}-{repo}-{branch}-contributors-{date}.csv`
+    
+    Example: `octocat-hello-world-main-contributors-2024-12-10.csv`
+  </Tab>
+  
+  <Tab title="Commits export">
+    Format: `{owner}-{repo}-{branch}-commits-{date}.csv`
+    
+    Example: `octocat-hello-world-develop-commits-2024-12-10.csv`
+  </Tab>
+</Tabs>
+
+**Branch name sanitization:**
+
+```typescript
+const safeBranchName = decodedBranch.replace(/[^a-zA-Z0-9-_]/g, "_");
+```
+
+This ensures filenames are valid on all operating systems by:
+- Removing special characters
+- Keeping alphanumeric, hyphens, and underscores
+- Replacing invalid characters with underscores
+
+## Error handling
+
+<Warning>
+Always validate export data before downloading to prevent empty or corrupted files.
+</Warning>
+
+```typescript
+if (!csv || typeof csv !== "string") {
+  console.error("Invalid CSV data");
+  alert("CSV data is not available for download");
+  return;
+}
+
+// Verify analysis is complete
+if (analysisState.status !== "complete") {
+  console.warn("Cannot download CSV: Analysis not complete");
+  return;
+}
+```
+
+## Use cases
+
+<Accordion title="Spreadsheet analysis">
+  Import CSV exports into Excel, Google Sheets, or other tools for:
+  - Custom visualizations
+  - Pivot tables
+  - Statistical analysis
+  - Joining with other data sources
+</Accordion>
+
+<Accordion title="Reporting">
+  Use exports for:
+  - Management reports
+  - Performance reviews
+  - Team retrospectives
+  - Quarterly summaries
+</Accordion>
+
+<Accordion title="Data archival">
+  Store exports for:
+  - Historical comparison
+  - Compliance requirements
+  - Trend analysis over time
+  - Audit trails
+</Accordion>
+
+<Accordion title="External processing">
+  Process exports with:
+  - Python/R scripts
+  - Business intelligence tools
+  - Custom analytics pipelines
+  - Machine learning models
+</Accordion>
+
+## Best practices
+
+<Card title="File naming" icon="file">
+  - Include repository and branch name
+  - Add timestamp for versioning
+  - Use safe characters only
+  - Keep names descriptive but concise
+</Card>
+
+<Card title="Data validation" icon="check-circle">
+  - Verify data completeness before export
+  - Check for null/undefined values
+  - Ensure proper CSV escaping
+  - Test with edge cases (special characters, newlines)
+</Card>
+
+<Card title="User experience" icon="users">
+  - Show loading state during export preparation
+  - Provide clear error messages
+  - Allow retry on failure
+  - Indicate file download progress
+</Card>
+
+## Accessibility
+
+Export buttons include proper ARIA labels:
+
+```tsx
+<Button
+  onClick={() => handleDownloadCSV("contributors")}
+  aria-label="Download contributors CSV file"
+>
+  <Download className="w-4 h-4" />
+  Contributors CSV
+</Button>
+```

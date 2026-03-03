@@ -1,0 +1,118 @@
+---
+title: Introduction to gitDash
+description: Fast, reliable GitHub contribution insights with AI-powered analytics. No spreadsheets, no manual triage.
+---
+
+# Introduction to gitDash
+
+Fast, reliable GitHub contribution insights without spreadsheets or manual triage. gitDash is a Next.js application that unifies GitHub API data with local git analysis to surface who owns what, when teams ship, and where the codebase is trending.
+
+Get clear visuals for activity and ownership, plus an optional AI Manager Report that turns raw metrics into concise, action-oriented summaries.
+
+## Why gitDash?
+
+GitHub's contribution tracking presents several challenges for engineering teams:
+
+- **Scattered information**: GitHub's UI and CLI scatter commit info across pages and commands—great for details, hard for trends
+- **Noisy attribution**: Merge commits, squashed histories, and email aliases skew the ownership story
+- **Manual reporting**: Managers need narratives ("what changed, who's stuck, where to improve") without hand-built reports
+- **Limited context**: No unified view combining local git data with GitHub metadata
+
+gitDash solves these problems by combining multiple data sources into actionable insights.
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get from zero to your first analysis in under 5 minutes
+  </Card>
+  
+  <Card title="Explore dashboard" icon="chart-line" href="/features/dashboard">
+    Discover visualizations and metrics available in gitDash
+  </Card>
+  
+  <Card title="Analysis modes" icon="sliders" href="/features/analysis-modes">
+    Learn about blame, commits, GitHub API, and hybrid analysis
+  </Card>
+  
+  <Card title="API reference" icon="code" href="/api-reference/overview">
+    Integrate gitDash APIs into your workflows
+  </Card>
+</CardGroup>
+
+## Key features
+
+### Multiple analysis modes
+
+- **Blame mode**: True line-level code ownership via `git blame`, automatically ignoring merge commits
+- **Commits mode**: Activity analysis tracking commit frequency and changes over time
+- **GitHub API mode**: Pull requests, issues, and contributor metadata
+- **Hybrid mode**: Combine all sources for the most comprehensive view
+
+### Rich visualizations
+
+Components built with Chart.js provide interactive insights:
+
+- Commits timeline and lines changed timeline
+- Net lines bar charts and add/remove stacked views
+- Activity and contribution heatmaps
+- Contribution Gantt charts showing when contributors are active
+- User weekly bar charts for time-based patterns
+
+### AI-powered insights
+
+- Optional AI Manager Report powered by OpenAI
+- Turns raw metrics into action-oriented narratives
+- Identifies risks and provides recommendations
+- Caching and graceful fallbacks for reliability
+
+### Real-time progress
+
+- Server-Sent Events (SSE) for streaming analysis progress
+- Live updates for large repositories
+- Partial results display during processing
+- Responsive UI with progress indicators
+
+### Export capabilities
+
+- CSV export for contributors data
+- Text exports for commit messages, times, and file attributions
+- Ready for spreadsheets or further processing
+- Batch export all analysis results
+
+### Security first
+
+- GitHub OAuth via Auth.js (NextAuth) with JWT sessions
+- Encrypted access tokens stored in session, not database
+- Session-scoped permissions with minimal required scopes
+- Privacy-focused: AI analysis is optional and off by default
+
+## How it works
+
+gitDash follows a clear data pipeline:
+
+1. **Authentication**: GitHub OAuth creates a JWT session with encrypted access token
+2. **Data fetching**: Octokit fetches commits from GitHub API with rate limit handling
+3. **Local analysis**: Git commands (blame, log) analyze repository structure and ownership
+4. **Processing**: Extract timelines, user metrics, and insights from combined data
+5. **Visualization**: Interactive charts display trends and patterns
+6. **AI enhancement**: Optional OpenAI integration provides narrative summaries
+7. **Export**: Generate CSV and text files for external use
+
+## Technology stack
+
+gitDash is built with modern tools:
+
+- [Next.js 14](https://nextjs.org/) - React framework with App Router
+- [Auth.js](https://authjs.dev/) - GitHub OAuth authentication
+- [Octokit](https://github.com/octokit) - GitHub API client
+- [Chart.js](https://www.chartjs.org/) - Interactive charts
+- [TypeScript](https://www.typescriptlang.org/) - Type safety
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [OpenAI](https://openai.com/) - AI-powered insights (optional)
+
+## Next steps
+
+<Card title="Get started with gitDash" icon="play" href="/quickstart">
+  Follow the quick start guide to set up your first analysis
+</Card>

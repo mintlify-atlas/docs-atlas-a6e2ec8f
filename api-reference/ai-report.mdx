@@ -1,0 +1,397 @@
+---
+title: 'POST /api/ai/manager-report'
+description: 'Generate AI-powered manager insights from repository analysis data'
+---
+
+## Endpoint
+
+```
+POST /api/ai/manager-report
+```
+
+Generates comprehensive, AI-powered insights and recommendations for engineering managers based on repository analysis data.
+
+## Authentication
+
+Requires valid NextAuth session with GitHub OAuth access token.
+
+## Configuration Requirements
+
+### OpenAI API Key
+
+This endpoint requires `OPENAI_API_KEY` to be configured in your environment variables:
+
+```bash .env.local
+OPENAI_API_KEY=sk-...
+```
+
+If not configured, the endpoint returns a `503 Service Unavailable` error with a fallback flag.
+
+## Request Body
+
+The request body should be the complete response from the Advanced Analysis endpoint.
+
+<ParamField body="timeline" type="object" required>
+  Repository timeline data from advanced analysis
+</ParamField>
+
+<ParamField body="insights" type="object" required>
+  Extracted insights from advanced analysis
+</ParamField>
+
+<ParamField body="commitMessageAnalysis" type="object" required>
+  Commit message quality analysis
+</ParamField>
+
+<ParamField body="metadata" type="object" required>
+  Analysis metadata including date range
+</ParamField>
+
+## Response
+
+<ResponseField name="insights" type="object">
+  AI-generated manager insights
+  
+  <Expandable title="Insights structure">
+    <ResponseField name="executiveSummary" type="string">
+      2-3 sentence concise overview of team performance, productivity trends, and code health
+    </ResponseField>
+    
+    <ResponseField name="strengths" type="array">
+      Array of team strengths with supporting data
+    </ResponseField>
+    
+    <ResponseField name="concerns" type="array">
+      Array of areas needing attention
+    </ResponseField>
+    
+    <ResponseField name="recommendations" type="array">
+      Array of actionable recommendations
+      
+      <Expandable title="Recommendation structure">
+        <ResponseField name="priority" type="string">
+          Priority level: `"high"`, `"medium"`, or `"low"`
+        </ResponseField>
+        
+        <ResponseField name="title" type="string">
+          Clear action item title
+        </ResponseField>
+        
+        <ResponseField name="description" type="string">
+          Detailed recommendation with specific steps
+        </ResponseField>
+        
+        <ResponseField name="impact" type="string">
+          Expected positive outcome if implemented
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="teamHealth" type="object">
+      Overall team health assessment
+      
+      <Expandable title="Team health structure">
+        <ResponseField name="score" type="number">
+          Health score from 0-100
+        </ResponseField>
+        
+        <ResponseField name="factors" type="array">
+          Factors contributing to the score
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="predictiveInsights" type="array">
+      Future trend predictions based on data
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="cached" type="boolean">
+  Whether the response was served from cache
+</ResponseField>
+
+<ResponseField name="timestamp" type="number">
+  Unix timestamp when the insights were generated or retrieved
+</ResponseField>
+
+## Example Request
+
+```bash cURL
+curl -X POST "https://your-domain.com/api/ai/manager-report" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: next-auth.session-token=YOUR_SESSION_TOKEN" \
+  -d '{
+    "timeline": {
+      "totalCommits": 523,
+      "totalAdditions": 45230,
+      "totalDeletions": 12450,
+      "users": [...]
+    },
+    "insights": {
+      "mostActiveDay": {...},
+      "languageDistribution": [...]
+    },
+    "commitMessageAnalysis": {
+      "statistics": {...}
+    },
+    "metadata": {
+      "analyzedCommits": 523,
+      "dateRange": {
+        "start": "2024-01-01T00:00:00Z",
+        "end": "2024-03-03T23:59:59Z"
+      }
+    }
+  }'
+```
+
+```javascript JavaScript
+// First, get the advanced analysis
+const analysisResponse = await fetch('/api/github/analyze/advanced', {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    owner: 'facebook',
+    repo: 'react',
+    branch: 'main'
+  })
+});
+
+const analysisData = await analysisResponse.json();
+
+// Then, generate AI insights
+const aiResponse = await fetch('/api/ai/manager-report', {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(analysisData)
+});
+
+const report = await aiResponse.json();
+console.log(report.insights.executiveSummary);
+console.log('Team Health Score:', report.insights.teamHealth.score);
+```
+
+## Example Response
+
+```json
+{
+  "insights": {
+    "executiveSummary": "The team demonstrates strong productivity with 523 commits over the analyzed period, showing healthy collaboration patterns. Commit message quality is above average with 68% following conventional commit standards. Weekend activity is minimal, indicating good work-life balance.",
+    "strengths": [
+      "High adoption of conventional commit format (68%), significantly above industry average of 40%",
+      "Balanced contribution distribution across 8 team members with no single point of failure",
+      "Strong collaboration patterns with 12 frequent collaborator pairs working on shared codebases",
+      "Healthy work-life balance evidenced by 94% weekday commits vs 6% weekend commits"
+    ],
+    "concerns": [
+      "15 generic commit messages detected (e.g., 'fix', 'update') that lack descriptive context",
+      "Two contributors have minimal recent activity (< 5 commits in last 30 days), potential knowledge transfer risk",
+      "Solo contributors working on 23% of files may create knowledge silos"
+    ],
+    "recommendations": [
+      {
+        "priority": "high",
+        "title": "Implement Commit Message Guidelines",
+        "description": "Create a team convention guide with examples of good vs. generic commit messages. Consider adding a pre-commit hook to validate message quality and enforce conventional commit format.",
+        "impact": "Improved code history readability, easier debugging, and better team communication. Expected to reduce time spent understanding change context by 30%."
+      },
+      {
+        "priority": "medium",
+        "title": "Address Potential Knowledge Silos",
+        "description": "Identify the 23% of files with solo contributors and implement pair programming or code review rotations to spread domain knowledge. Schedule knowledge sharing sessions for critical components.",
+        "impact": "Reduced bus factor risk, improved team resilience, and enhanced cross-functional capabilities."
+      },
+      {
+        "priority": "medium",
+        "title": "Re-engage Low-Activity Contributors",
+        "description": "Schedule 1:1s with the two contributors showing minimal recent activity to identify blockers, provide support, or redistribute workload if needed.",
+        "impact": "Improved team morale, better resource utilization, and early identification of potential retention issues."
+      },
+      {
+        "priority": "low",
+        "title": "Celebrate Collaborative Culture",
+        "description": "Publicly recognize the 12 collaborator pairs demonstrating strong teamwork. Share their collaboration patterns as best practices.",
+        "impact": "Reinforced positive behaviors, increased team cohesion, and motivation for continued collaboration."
+      }
+    ],
+    "teamHealth": {
+      "score": 78,
+      "factors": [
+        "Strong conventional commit adoption shows engineering discipline",
+        "Balanced workload distribution indicates healthy team dynamics",
+        "Low weekend activity suggests sustainable pace",
+        "Some knowledge silos and generic commits present improvement opportunities"
+      ]
+    },
+    "predictiveInsights": [
+      "Current commit message quality trajectory suggests team will reach 80% conventional commit compliance within 3 months if current trend continues",
+      "Collaboration patterns indicate increasing code ownership distribution, reducing single points of failure over time",
+      "Language distribution shows gradual shift toward TypeScript (up 12% quarter-over-quarter), suggesting modernization efforts are progressing"
+    ]
+  },
+  "cached": false,
+  "timestamp": 1709481234567
+}
+```
+
+## Caching Behavior
+
+### Cache Key Generation
+
+From `route.ts:126-130`:
+
+```typescript
+function generateCacheKey(data: AdvancedAnalysisResponse): string {
+  const { timeline, metadata } = data;
+  return `ai_insights_${timeline.totalCommits}_${metadata.dateRange.start}_${metadata.dateRange.end}`;
+}
+```
+
+### Cache Settings
+
+- **Storage:** In-memory Map (consider Redis for production)
+- **TTL:** 1 hour (3,600,000 milliseconds)
+- **Cache key:** Based on commit count and date range
+- **Invalidation:** Automatic after TTL expires
+
+## AI Model Configuration
+
+From `route.ts:138-155`:
+
+```typescript
+const completion = await openai.chat.completions.create({
+  model: 'gpt-5-mini',
+  messages: [
+    {
+      role: 'system',
+      content: `You are an expert engineering manager analyzing team productivity...`
+    },
+    {
+      role: 'user',
+      content: prompt
+    }
+  ],
+  temperature: 1,
+  max_completion_tokens: 2000,
+  response_format: { type: "json_object" }
+});
+```
+
+**Model:** `gpt-5-mini`  
+**Temperature:** `1.0` (balanced creativity and consistency)  
+**Max tokens:** `2000`  
+**Format:** JSON object (guaranteed valid JSON response)
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "error": "Unauthorized. Please sign in to access AI features.",
+  "fallback": true
+}
+```
+
+### 400 Bad Request
+
+```json
+{
+  "error": "Invalid data provided. Repository analysis data is required.",
+  "fallback": true
+}
+```
+
+### 503 Service Unavailable (No API Key)
+
+```json
+{
+  "error": "AI features are not available. OpenAI API key is not configured.",
+  "fallback": true,
+  "suggestion": "Please add OPENAI_API_KEY to your .env.local file."
+}
+```
+
+### 429 Too Many Requests (Quota Exceeded)
+
+```json
+{
+  "error": "AI quota exceeded. Using fallback analysis.",
+  "fallback": true,
+  "details": "The OpenAI API quota has been exceeded. Please check your billing or try again later.",
+  "suggestion": "The traditional report is still available below."
+}
+```
+
+### 401 Invalid API Key
+
+```json
+{
+  "error": "Invalid OpenAI API key.",
+  "fallback": true,
+  "details": "The OpenAI API key is invalid or expired.",
+  "suggestion": "Please update your OPENAI_API_KEY in .env.local"
+}
+```
+
+### 503 OpenAI Service Unavailable
+
+```json
+{
+  "error": "OpenAI service temporarily unavailable.",
+  "fallback": true,
+  "details": "The OpenAI service is currently unavailable. Please try again later."
+}
+```
+
+### 500 Internal Server Error
+
+```json
+{
+  "error": "Failed to generate AI insights.",
+  "fallback": true,
+  "details": "An unexpected error occurred.",
+  "suggestion": "Please try again or view the traditional report below."
+}
+```
+
+## Fallback Handling
+
+All error responses include `"fallback": true`, indicating that the client should display traditional analysis instead of AI-generated insights.
+
+## Analysis Prompt
+
+The AI receives comprehensive data including:
+
+- Total commits, contributors, lines changed
+- Top contributors with detailed metrics
+- Activity patterns (weekday vs weekend, most active day)
+- File analysis (most edited files, collaboration patterns)
+- **Commit message analysis:**
+  - Message length statistics and distribution
+  - Conventional commit compliance percentage
+  - User writing style categories (verbose, minimalist, balanced)
+  - Quality patterns (generic messages, single-char commits, empty messages)
+
+From `route.ts:185-306`, the prompt instructs the AI to:
+
+1. Analyze overall sentiment and professionalism
+2. Assess message quality and usefulness
+3. Evaluate adherence to conventional commit standards
+4. Provide specific recommendations for improvement
+5. Compare to industry best practices
+6. Assess impact on collaboration and maintainability
+
+## Use Cases
+
+- **Performance reviews:** Data-driven insights for quarterly reviews
+- **Team health monitoring:** Track collaboration patterns and work-life balance
+- **Process improvement:** Identify commit message quality issues and best practices
+- **Knowledge management:** Detect knowledge silos and single points of failure
+- **Strategic planning:** Predictive insights for future trends
+
+## Implementation Reference
+
+See `~/workspace/source/app/api/ai/manager-report/route.ts` for full implementation details.

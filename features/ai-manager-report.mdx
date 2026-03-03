@@ -1,0 +1,534 @@
+---
+title: AI manager report
+description: Generate AI-powered insights and recommendations using OpenAI for team productivity analysis
+---
+
+The AI Manager Report leverages OpenAI's GPT-5-mini to provide intelligent analysis, actionable recommendations, and team health insights based on repository contribution data.
+
+## Overview
+
+The AI Manager Report transforms raw contribution metrics into executive-friendly insights with:
+
+<CardGroup cols={2}>
+  <Card title="Executive summary" icon="file-text">
+    Concise 2-3 sentence overview of team performance and code health.
+  </Card>
+  
+  <Card title="Team health score" icon="heart-pulse">
+    Numerical score (0-100) with contributing factors.
+  </Card>
+  
+  <Card title="Strengths & concerns" icon="scale">
+    Balanced assessment of what's working and what needs attention.
+  </Card>
+  
+  <Card title="Recommendations" icon="lightbulb">
+    Prioritized action items with expected impact.
+  </Card>
+</CardGroup>
+
+## Configuration
+
+### OpenAI setup
+
+Add your OpenAI API key to `.env.local`:
+
+```bash .env.local
+OPENAI_API_KEY=sk-...
+```
+
+<Warning>
+Never commit your OpenAI API key to version control. Use environment variables only.
+</Warning>
+
+### OpenAI client
+
+**Location:** `lib/openai.ts`
+
+```typescript lib/openai.ts
+import OpenAI from 'openai';
+
+let openaiClient: OpenAI | null = null;
+
+export function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+
+    openaiClient = new OpenAI({ apiKey });
+  }
+
+  return openaiClient;
+}
+
+export function isOpenAIConfigured(): boolean {
+  return !!process.env.OPENAI_API_KEY;
+}
+```
+
+## Component usage
+
+### AIManagerReport component
+
+**Location:** `components/AIManagerReport.tsx`
+
+```tsx
+import { AIManagerReport } from "@/components/AIManagerReport";
+import type { AdvancedAnalysisResponse } from "@/lib/types";
+
+<AIManagerReport data={analysisData} />
+```
+
+### Props interface
+
+```typescript
+interface AIManagerReportProps {
+  data: AdvancedAnalysisResponse;
+}
+
+interface AdvancedAnalysisResponse {
+  timeline: RepositoryTimeline;
+  insights: Insights;
+  metadata: Metadata;
+  commitMessageAnalysis: CommitMessageAnalysis;
+}
+```
+
+## AI insights structure
+
+The AI generates structured insights following this schema:
+
+```typescript
+interface AIInsights {
+  executiveSummary: string;
+  strengths: string[];
+  concerns: string[];
+  recommendations: Array<{
+    priority: "high" | "medium" | "low";
+    title: string;
+    description: string;
+    impact: string;
+  }>;
+  teamHealth: {
+    score: number;        // 0-100
+    factors: string[];
+  };
+  predictiveInsights: string[];
+}
+```
+
+## Generating insights
+
+### API endpoint
+
+**Location:** `app/api/ai/manager-report/route.ts`
+
+```typescript
+export async function POST(request: NextRequest) {
+  // 1. Authenticate user
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json(
+      { error: 'Unauthorized', fallback: true },
+      { status: 401 }
+    );
+  }
+
+  // 2. Check if OpenAI is configured
+  if (!isOpenAIConfigured()) {
+    return NextResponse.json(
+      { 
+        error: 'AI features are not available',
+        suggestion: 'Please add OPENAI_API_KEY to your .env.local file.'
+      },
+      { status: 503 }
+    );
+  }
+
+  // 3. Parse request data
+  const data: AdvancedAnalysisResponse = await request.json();
+
+  // 4. Check cache
+  const cacheKey = generateCacheKey(data);
+  const cached = cache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return NextResponse.json({ 
+      insights: cached.data,
+      cached: true
+    });
+  }
+
+  // 5. Generate AI insights
+  const insights = await generateManagerInsights(data);
+
+  // 6. Cache the result
+  cache.set(cacheKey, { data: insights, timestamp: Date.now() });
+
+  return NextResponse.json({ insights, cached: false });
+}
+```
+
+### Prompt construction
+
+The AI prompt includes comprehensive repository metrics:
+
+<Accordion title="Repository metrics">
+  - Total commits and contributors
+  - Lines added, removed, and net change
+  - Active contributors (last 30 days)
+  - Date range analyzed
+</Accordion>
+
+<Accordion title="Top contributors">
+  - Top 5 contributors by commits
+  - Their additions, deletions, and net lines
+  - Contribution percentage
+</Accordion>
+
+<Accordion title="Activity patterns">
+  - Most active day of week
+  - Weekday vs weekend commits
+  - Solo contributors count
+  - Collaboration patterns
+</Accordion>
+
+<Accordion title="Commit message analysis">
+  - Average and median message length
+  - Conventional commit usage percentage
+  - Most common commit type
+  - Length distribution (short/medium/long/verbose)
+  - Quality patterns (generic messages, empty messages, etc.)
+</Accordion>
+
+```typescript
+function buildPrompt(data: AdvancedAnalysisResponse): string {
+  return `Analyze this GitHub repository contribution data...
+
+**Repository Metrics:**
+- Total Commits: ${timeline.totalCommits}
+- Total Contributors: ${timeline.users.length}
+- Active Contributors (last 30 days): ${activeContributors}
+- Lines Added: +${timeline.totalAdditions.toLocaleString()}
+- Net Change: ${timeline.totalNetLines >= 0 ? '+' : ''}${timeline.totalNetLines.toLocaleString()} lines
+
+**Top Contributors:**
+${topContributors.map((u, i) => 
+  `${i + 1}. ${u.userName}: ${u.totalCommits} commits, Net: ${u.totalNetLines.toLocaleString()}`
+).join('\n')}
+
+**Commit Message Analysis:**
+- Average Message Length: ${commitMessageAnalysis.statistics.avgLength} characters
+- Conventional Commit Usage: ${commitMessageAnalysis.statistics.conventionalCommitPercentage}%
+...
+`;
+}
+```
+
+### OpenAI API call
+
+```typescript
+async function generateManagerInsights(data: AdvancedAnalysisResponse) {
+  const openai = getOpenAIClient();
+  const prompt = buildPrompt(data);
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-5-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `You are an expert engineering manager analyzing team productivity.
+        Provide actionable insights in a professional, concise manner.
+        Always respond with valid JSON only, no markdown formatting.`
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+    temperature: 1,
+    max_completion_tokens: 2000,
+    response_format: { type: "json_object" }
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  return parseAIResponse(content);
+}
+```
+
+<Info>
+The AI uses `response_format: { type: "json_object" }` to ensure structured JSON output.
+</Info>
+
+## Caching system
+
+AI insights are cached to reduce API costs and improve performance.
+
+### Cache implementation
+
+```typescript
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
+function generateCacheKey(data: AdvancedAnalysisResponse): string {
+  const { timeline, metadata } = data;
+  return `ai_insights_${timeline.totalCommits}_${metadata.dateRange.start}_${metadata.dateRange.end}`;
+}
+```
+
+<Tabs>
+  <Tab title="Cache hit">
+    If cached insights exist and are less than 1 hour old:
+    
+    ```typescript
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json({ 
+        insights: cached.data,
+        cached: true  // Indicates cache hit
+      });
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Cache miss">
+    If no cache or expired, generate new insights:
+    
+    ```typescript
+    const insights = await generateManagerInsights(data);
+    cache.set(cacheKey, { data: insights, timestamp: Date.now() });
+    
+    return NextResponse.json({ 
+      insights,
+      cached: false
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+In production, consider using Redis or another persistent cache instead of in-memory Map.
+</Note>
+
+## UI components
+
+### Generate button
+
+```tsx
+<Button
+  onClick={fetchAIInsights}
+  disabled={isLoading}
+  className="gap-2 bg-gradient-to-r from-orange-600 to-orange-700"
+>
+  {isLoading ? (
+    <>
+      <Loader2 className="w-4 h-4 animate-spin" />
+      Generating AI Insights...
+    </>
+  ) : (
+    <>
+      <Sparkles className="w-4 h-4" />
+      Generate AI Insights
+    </>
+  )}
+</Button>
+```
+
+### Executive summary
+
+```tsx
+<Card>
+  <CardHeader>
+    <div className="flex items-center gap-2">
+      <Sparkles className="w-5 h-5 text-amber-600" />
+      <CardTitle>AI Executive Summary</CardTitle>
+    </div>
+  </CardHeader>
+  <CardContent>
+    <p className="text-gray-700 leading-relaxed">
+      {aiInsights.executiveSummary}
+    </p>
+  </CardContent>
+</Card>
+```
+
+### Team health score
+
+Circular progress indicator with score:
+
+```tsx
+<div className="relative w-32 h-32">
+  <svg className="transform -rotate-90 w-32 h-32">
+    <circle
+      cx="64"
+      cy="64"
+      r="56"
+      stroke="currentColor"
+      strokeWidth="12"
+      strokeDasharray={`${2 * Math.PI * 56}`}
+      strokeDashoffset={`${2 * Math.PI * 56 * (1 - score / 100)}`}
+      className={score >= 80 ? "text-teal-600" : "text-amber-600"}
+    />
+  </svg>
+  <div className="absolute inset-0 flex items-center justify-center">
+    <span className="text-3xl font-bold">{score}</span>
+  </div>
+</div>
+```
+
+### Recommendations
+
+Prioritized cards with color coding:
+
+```tsx
+{aiInsights.recommendations.map((rec, i) => (
+  <div
+    key={i}
+    className={`p-4 rounded-lg border ${
+      rec.priority === "high" ? "bg-red-50 border-red-200" :
+      rec.priority === "medium" ? "bg-yellow-50 border-yellow-200" :
+      "bg-sky-50 border-sky-200"
+    }`}
+  >
+    <h4 className="font-semibold">{rec.title}</h4>
+    <p className="text-sm">{rec.description}</p>
+    <p className="text-xs italic">Expected Impact: {rec.impact}</p>
+  </div>
+))}
+```
+
+## Error handling
+
+Comprehensive error handling with fallback behavior:
+
+<Tabs>
+  <Tab title="Unauthorized">
+    ```typescript
+    if (!session) {
+      return NextResponse.json(
+        { 
+          error: 'Unauthorized. Please sign in.',
+          fallback: true 
+        },
+        { status: 401 }
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Not configured">
+    ```typescript
+    if (!isOpenAIConfigured()) {
+      return NextResponse.json(
+        { 
+          error: 'AI features are not available',
+          suggestion: 'Add OPENAI_API_KEY to .env.local'
+        },
+        { status: 503 }
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Quota exceeded">
+    ```typescript
+    if (error.code === 'insufficient_quota') {
+      return NextResponse.json(
+        {
+          error: 'AI quota exceeded',
+          details: 'OpenAI API quota exceeded',
+          suggestion: 'Traditional report is available below.'
+        },
+        { status: 429 }
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Error UI
+
+```tsx
+{error && (
+  <Card className="border-amber-200 bg-amber-50">
+    <CardContent className="pt-6">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="w-6 h-6 text-amber-600" />
+        <div>
+          <h3 className="font-semibold">{error.error}</h3>
+          {error.details && <p className="text-sm">{error.details}</p>}
+          {error.suggestion && (
+            <p className="text-sm"><strong>Suggestion:</strong> {error.suggestion}</p>
+          )}
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+)}
+```
+
+## Fallback behavior
+
+When AI is unavailable or disabled, show traditional report:
+
+```tsx
+{!useAI && (
+  <Card>
+    <CardHeader>
+      <CardTitle>Executive Summary</CardTitle>
+    </CardHeader>
+    <CardContent>
+      <p>
+        The repository shows <strong>{timeline.totalCommits} total commits</strong>
+        from <strong>{timeline.users.length} contributors</strong> over the analyzed period.
+        With <strong>+{timeline.totalAdditions.toLocaleString()} lines added</strong>
+        and <strong>-{timeline.totalDeletions.toLocaleString()} lines removed</strong>,
+        the codebase has experienced a net change of
+        <strong> {timeline.totalNetLines.toLocaleString()} lines</strong>.
+      </p>
+    </CardContent>
+  </Card>
+)}
+```
+
+## Best practices
+
+<Card title="API key security" icon="shield">
+  - Never commit API keys
+  - Use environment variables
+  - Rotate keys regularly
+  - Monitor usage and costs
+</Card>
+
+<Card title="Cost optimization" icon="dollar-sign">
+  - Implement caching (1 hour TTL)
+  - Use `gpt-5-mini` for cost efficiency
+  - Limit token output (max 2000)
+  - Monitor API usage
+</Card>
+
+<Card title="Error resilience" icon="shield-check">
+  - Always provide fallback content
+  - Handle all error types gracefully
+  - Display helpful error messages
+  - Allow users to retry
+</Card>
+
+## Example output
+
+<Accordion title="Executive summary example">
+  "The team demonstrates strong productivity with 1,247 commits from 8 contributors over the past quarter. The codebase shows healthy growth with +45,231 lines added and only -12,445 lines removed, indicating active feature development. Collaboration patterns are strong with 85% of commits during weekdays and consistent activity from core team members."
+</Accordion>
+
+<Accordion title="Recommendation example">
+  ```json
+  {
+    "priority": "high",
+    "title": "Improve commit message quality",
+    "description": "32% of commit messages are under 20 characters and lack context. Implement conventional commit standards and enforce message length minimums through git hooks.",
+    "impact": "Better code archaeology, easier code reviews, and improved team communication. Expected 50% reduction in time spent understanding past changes."
+  }
+  ```
+</Accordion>

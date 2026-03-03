@@ -1,0 +1,501 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for gitDash
+---
+
+## Authentication issues
+
+<Accordion title="GitHub OAuth authentication fails">
+  **Symptoms**: Sign-in button doesn't work, redirects fail, or OAuth errors appear.
+  
+  **Common causes**:
+  
+  1. **Callback URL mismatch**
+     - Verify `NEXTAUTH_URL` in environment variables matches your domain exactly
+     - Check GitHub OAuth App callback URL is set to `{NEXTAUTH_URL}/api/auth/callback/github`
+     - Ensure protocol (http/https) matches between settings
+     - Include port number for local development (e.g., `:3000`)
+  
+  2. **Invalid OAuth credentials**
+     - Verify `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are correct
+     - Ensure you're using the correct OAuth App (development vs production)
+     - Check that the OAuth App is active in GitHub settings
+  
+  3. **Missing or weak AUTH_SECRET**
+     - Verify `AUTH_SECRET` is set in environment variables
+     - Ensure it's a strong random string (at least 32 characters)
+     - Generate a new secret: `openssl rand -base64 32`
+  
+  **Solutions**:
+  
+  ```bash
+  # Verify environment variables
+  echo $GITHUB_CLIENT_ID
+  echo $NEXTAUTH_URL
+  
+  # Check .env.local exists and contains all required variables
+  cat .env.local
+  
+  # Regenerate AUTH_SECRET if needed
+  openssl rand -base64 32
+  ```
+  
+  After fixing environment variables:
+  1. Restart the development server
+  2. Clear browser cookies
+  3. Try signing in again
+</Accordion>
+
+<Accordion title="Session expires immediately or doesn't persist">
+  **Symptoms**: User is signed out immediately after signing in, or session doesn't persist across page refreshes.
+  
+  **Common causes**:
+  
+  1. **AUTH_SECRET changed or missing**
+     - Changing `AUTH_SECRET` invalidates all existing sessions
+     - Missing `AUTH_SECRET` prevents session creation
+  
+  2. **Cookie issues**
+     - Browser blocking third-party cookies
+     - Strict cookie settings
+     - Incognito/private mode restrictions
+  
+  3. **Domain mismatch**
+     - `NEXTAUTH_URL` doesn't match the actual domain
+     - Cookies are set for wrong domain
+  
+  **Solutions**:
+  
+  1. Verify `AUTH_SECRET` is set and hasn't changed
+  2. Clear all browser cookies for the domain
+  3. Check browser console for cookie-related errors
+  4. Ensure `NEXTAUTH_URL` matches the domain in the browser
+  5. Try in a different browser to rule out browser-specific issues
+</Accordion>
+
+<Accordion title="Unauthorized error (401)">
+  **Symptoms**: API requests fail with "GitHub authentication failed. Please sign in again."
+  
+  **Error message** (from `lib/errors.ts:278-283`):
+  ```
+  GitHubAPIError: GitHub authentication failed. Please sign in again.
+  Code: UNAUTHORIZED
+  Status: 401
+  ```
+  
+  **Solutions**:
+  
+  1. Sign out and sign in again to refresh the access token
+  2. Verify the GitHub OAuth App is still active
+  3. Check that OAuth scopes haven't changed
+  4. Ensure the access token is being stored correctly in the JWT session
+  5. Review `lib/auth.ts:40-56` for JWT callback issues
+</Accordion>
+
+## Build errors
+
+<Accordion title="TypeScript compilation errors">
+  **Symptoms**: Build fails with TypeScript errors.
+  
+  **Common errors**:
+  
+  ```
+  error TS2339: Property 'xyz' does not exist on type 'ABC'
+  error TS2322: Type 'X' is not assignable to type 'Y'
+  error TS2345: Argument of type 'X' is not assignable to parameter of type 'Y'
+  ```
+  
+  **Solutions**:
+  
+  1. Run type checking locally:
+     ```bash
+     npm run type-check
+     ```
+  
+  2. Fix type errors in your code
+  
+  3. Ensure TypeScript version matches:
+     ```bash
+     npm install typescript@^5.3.3
+     ```
+  
+  4. Check `tsconfig.json` is properly configured
+  
+  5. Clear Next.js cache and rebuild:
+     ```bash
+     rm -rf .next
+     npm run build
+     ```
+</Accordion>
+
+<Accordion title="Missing dependencies">
+  **Symptoms**: Build fails with "Cannot find module" errors.
+  
+  **Error example**:
+  ```
+  Error: Cannot find module '@octokit/rest'
+  Error: Cannot find module 'chart.js'
+  ```
+  
+  **Solutions**:
+  
+  1. Install all dependencies:
+     ```bash
+     npm install
+     ```
+  
+  2. Verify `package.json` includes all required dependencies
+  
+  3. Clear npm cache and reinstall:
+     ```bash
+     rm -rf node_modules package-lock.json
+     npm install
+     ```
+  
+  4. Check Node.js version (requires 18+):
+     ```bash
+     node --version
+     ```
+</Accordion>
+
+<Accordion title="Environment variables not loaded during build">
+  **Symptoms**: Build fails with errors about missing environment variables.
+  
+  **Error message** (from `lib/auth.ts:14-25`):
+  ```
+  Error: GITHUB_CLIENT_ID environment variable is required
+  Error: GITHUB_CLIENT_SECRET environment variable is required
+  Error: AUTH_SECRET environment variable is required
+  ```
+  
+  **Solutions**:
+  
+  1. Verify `.env.local` exists in project root
+  
+  2. Check all required variables are present:
+     ```bash
+     cat .env.local
+     ```
+  
+  3. For production builds, set variables in hosting platform
+  
+  4. Ensure no typos in variable names (case-sensitive)
+  
+  5. Restart development server after adding variables
+</Accordion>
+
+## GitHub API issues
+
+<Accordion title="Rate limit exceeded (429)">
+  **Symptoms**: API requests fail with rate limit errors.
+  
+  **Error message** (from `lib/errors.ts:250-256`):
+  ```
+  GitHubAPIError: GitHub API rate limit exceeded. Please try again later.
+  Code: RATE_LIMIT_EXCEEDED
+  Status: 403
+  ```
+  
+  **Rate limits**:
+  - Authenticated requests: 5,000 per hour
+  - Unauthenticated requests: 60 per hour
+  
+  **Solutions**:
+  
+  1. Wait for rate limit to reset (resets hourly)
+  
+  2. Check remaining rate limit:
+     ```bash
+     curl -H "Authorization: token YOUR_TOKEN" \
+       https://api.github.com/rate_limit
+     ```
+  
+  3. Verify you're authenticated (check session)
+  
+  4. For large repositories:
+     - Analyze smaller date ranges
+     - Use pagination and streaming features
+     - Implement caching (future enhancement)
+  
+  5. Review API usage patterns to reduce unnecessary requests
+</Accordion>
+
+<Accordion title="Repository or branch not found (404)">
+  **Symptoms**: Analysis fails with "Repository or branch not found" error.
+  
+  **Error message** (from `lib/errors.ts:259-265`):
+  ```
+  GitHubAPIError: Repository or branch not found. Please check the repository name and branch.
+  Code: NOT_FOUND
+  Status: 404
+  ```
+  
+  **Solutions**:
+  
+  1. Verify repository name is correct (case-sensitive)
+  2. Check branch name exists in the repository
+  3. Ensure you have access to the repository
+  4. For private repositories, verify OAuth scopes include `repo`
+  5. Check repository hasn't been deleted or renamed
+</Accordion>
+
+<Accordion title="Access denied / Forbidden (403)">
+  **Symptoms**: Cannot access repository or perform actions.
+  
+  **Error message** (from `lib/errors.ts:268-274`):
+  ```
+  GitHubAPIError: Access denied. You may not have permission to access this repository.
+  Code: FORBIDDEN
+  Status: 403
+  ```
+  
+  **Solutions**:
+  
+  1. Verify you have read access to the repository
+  2. For private repositories, ensure OAuth scopes include `repo`
+  3. Check repository permissions in GitHub
+  4. Sign out and sign in again to refresh OAuth token
+  5. Verify the repository isn't archived or access-restricted
+</Accordion>
+
+<Accordion title="Request timeout (408)">
+  **Symptoms**: Requests fail with timeout errors for large repositories.
+  
+  **Error message** (from `lib/errors.ts:296-301`):
+  ```
+  GitHubAPIError: Request timed out. The repository might be too large or the connection is slow.
+  Code: TIMEOUT
+  Status: 408
+  ```
+  
+  **Solutions**:
+  
+  1. Use streaming endpoints for large repositories:
+     - `/api/github/analyze/advanced/stream` for real-time progress
+  
+  2. Analyze smaller time ranges or specific branches
+  
+  3. Check network connection stability
+  
+  4. For very large repositories (>10,000 commits):
+     - Use the advanced analysis features
+     - Enable progress streaming
+     - Consider analyzing in chunks
+</Accordion>
+
+<Accordion title="Invalid request parameters (422)">
+  **Symptoms**: API requests fail with validation errors.
+  
+  **Error message** (from `lib/errors.ts:287-292`):
+  ```
+  GitHubAPIError: Invalid request parameters
+  Code: VALIDATION_ERROR
+  Status: 422
+  ```
+  
+  **Solutions**:
+  
+  1. Verify all required parameters are provided:
+     - `owner`: Repository owner username
+     - `repo`: Repository name
+     - `branch`: Branch name
+  
+  2. Check for special characters in parameters
+  3. Ensure branch name is URL-encoded if it contains special characters
+  4. Verify date ranges are valid (if provided)
+  5. Check API request format matches expected schema
+</Accordion>
+
+## Runtime errors
+
+<Accordion title="Analysis fails or returns incomplete data">
+  **Symptoms**: Analysis completes but data is missing or incorrect.
+  
+  **Common causes**:
+  
+  1. **Large repository issues**
+     - Too many commits to process
+     - Memory constraints
+     - API pagination limits
+  
+  2. **Data quality issues**
+     - Merge commits skewing data
+     - Bot commits included
+     - Email aliases not normalized
+  
+  **Solutions**:
+  
+  1. Use advanced analysis mode with streaming:
+     ```javascript
+     // Use /api/github/analyze/advanced/stream
+     const eventSource = new EventSource('/api/github/analyze/advanced/stream?...');
+     ```
+  
+  2. Filter bot commits:
+     ```json
+     {
+       "owner": "user",
+       "repo": "repo",
+       "branch": "main",
+       "includeBots": false
+     }
+     ```
+  
+  3. Use blame-based analysis for accurate ownership:
+     - See `lib/git/blame.ts` for implementation
+  
+  4. Check for warnings in analysis results:
+     ```javascript
+     if (result.warnings.length > 0) {
+       console.log('Analysis warnings:', result.warnings);
+     }
+     ```
+</Accordion>
+
+<Accordion title="AI Manager Report fails">
+  **Symptoms**: AI Manager Report doesn't generate or returns errors.
+  
+  **Common causes**:
+  
+  1. `OPENAI_API_KEY` not configured
+  2. Invalid OpenAI API key
+  3. Insufficient OpenAI credits
+  4. Analysis data too large for OpenAI context
+  
+  **Solutions**:
+  
+  1. Verify OpenAI API key is set:
+     ```bash
+     echo $OPENAI_API_KEY
+     ```
+  
+  2. Check API key is valid at [OpenAI Platform](https://platform.openai.com/api-keys)
+  
+  3. Verify you have available credits/quota
+  
+  4. For very large analysis data:
+     - Analyze smaller time ranges
+     - Use summary data instead of full commit history
+  
+  5. Check fallback behavior (from `lib/openai.ts`):
+     - App gracefully handles missing API key
+     - Shows message indicating feature unavailable
+</Accordion>
+
+<Accordion title="Memory errors or crashes">
+  **Symptoms**: Application crashes with out-of-memory errors.
+  
+  **Common with**:
+  - Very large repositories (>50,000 commits)
+  - Processing entire commit history at once
+  - Multiple concurrent analyses
+  
+  **Solutions**:
+  
+  1. Use streaming analysis endpoints:
+     - `/api/github/analyze/advanced/stream`
+  
+  2. Analyze smaller time windows:
+     - Last 6 months instead of all time
+     - Specific date ranges
+  
+  3. Increase Node.js memory limit:
+     ```bash
+     NODE_OPTIONS="--max-old-space-size=4096" npm run dev
+     ```
+  
+  4. For hosting platforms, upgrade to a plan with more memory
+  
+  5. Implement pagination and process data in chunks
+</Accordion>
+
+## UI and display issues
+
+<Accordion title="Charts not rendering">
+  **Symptoms**: Visualizations don't appear or show errors.
+  
+  **Solutions**:
+  
+  1. Check browser console for errors
+  
+  2. Verify Chart.js is loaded:
+     ```bash
+     npm list chart.js react-chartjs-2
+     ```
+  
+  3. Ensure analysis data is complete:
+     - Check network tab for API responses
+     - Verify data format matches expected schema
+  
+  4. Clear browser cache and reload
+  
+  5. Try a different browser to rule out browser-specific issues
+</Accordion>
+
+<Accordion title="Loading states stuck or indefinite">
+  **Symptoms**: Loading spinners never complete.
+  
+  **Common causes**:
+  - API request failed silently
+  - Network timeout
+  - Missing error handling
+  
+  **Solutions**:
+  
+  1. Check browser console for errors
+  2. Check network tab for failed requests
+  3. Verify API endpoint is responding
+  4. Check for CORS issues (production deployments)
+  5. Refresh the page and try again
+</Accordion>
+
+<Accordion title="GitHub avatars not loading">
+  **Symptoms**: User avatars show broken image icons.
+  
+  **Solutions**:
+  
+  1. Verify `next.config.mjs` includes GitHub avatar domain:
+     ```javascript
+     images: {
+       remotePatterns: [
+         {
+           protocol: "https",
+           hostname: "avatars.githubusercontent.com",
+         },
+       ],
+     }
+     ```
+  
+  2. Check Content Security Policy (CSP) headers
+  3. Verify network access to `avatars.githubusercontent.com`
+  4. Clear browser cache
+  5. Check for ad blockers or privacy extensions blocking images
+</Accordion>
+
+## Getting help
+
+If you're still experiencing issues:
+
+1. **Check error logs**
+   - Browser console for client-side errors
+   - Server logs for API and runtime errors
+   - Build logs for deployment issues
+
+2. **Search existing issues**
+   - Check GitHub repository issues
+   - Search for similar error messages
+
+3. **Gather information**
+   - Error messages (full text)
+   - Steps to reproduce
+   - Environment details (Node version, OS, browser)
+   - Relevant code snippets
+
+4. **Open an issue**
+   - Provide all gathered information
+   - Include screenshots if relevant
+   - Describe expected vs actual behavior
+
+<Note>
+For security-related issues, contact the maintainers privately rather than opening a public issue.
+</Note>

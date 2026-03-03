@@ -1,0 +1,465 @@
+---
+title: Security
+description: Security best practices and guidelines for gitDash
+---
+
+## Overview
+
+gitDash handles sensitive GitHub data and user credentials. Following security best practices is essential to protect your data and your users' information.
+
+<Warning>
+This page contains critical security information. Read and implement all recommendations before deploying to production.
+</Warning>
+
+## Environment variable security
+
+### Never commit .env.local
+
+The `.env.local` file contains sensitive credentials and must never be committed to version control.
+
+**Why this matters**:
+- Contains OAuth client secrets
+- Includes session encryption keys
+- May contain API keys (OpenAI)
+- Exposed credentials can compromise your entire application
+
+<Warning>
+Once credentials are committed to Git, they are in the repository history forever. If you accidentally commit `.env.local`, you must:
+
+1. Immediately rotate all credentials (generate new ones)
+2. Update GitHub OAuth App with new secrets
+3. Update production environment variables
+4. Remove the file from Git history using `git filter-branch` or BFG Repo-Cleaner
+</Warning>
+
+**Verify .gitignore**:
+
+Ensure your `.gitignore` includes:
+
+```gitignore
+# Environment variables
+.env.local
+.env*.local
+.env.production
+.env.development
+```
+
+**Check for committed secrets**:
+
+```bash
+# Search for .env.local in Git history
+git log --all --full-history -- .env.local
+
+# Check current status
+git status
+```
+
+If `.env.local` appears in `git status`, do NOT commit:
+
+```bash
+# Remove from staging if accidentally added
+git reset .env.local
+```
+
+### Strong AUTH_SECRET requirement
+
+`AUTH_SECRET` is used to encrypt JWT tokens and session data. A weak secret compromises all user sessions.
+
+<Warning>
+**Requirements for AUTH_SECRET**:
+
+- Minimum 32 characters (longer is better)
+- Cryptographically random (not predictable)
+- Different for each environment (dev, staging, production)
+- Never reused across projects
+- Never based on dictionary words or common patterns
+</Warning>
+
+**Generate a secure secret**:
+
+```bash
+# Recommended: OpenSSL (generates 32 random bytes, base64 encoded)
+openssl rand -base64 32
+
+# Alternative: Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+**Bad examples** (never use):
+```bash
+AUTH_SECRET=secret
+AUTH_SECRET=password123
+AUTH_SECRET=my-app-secret
+AUTH_SECRET=12345678901234567890123456789012
+```
+
+**Good example**:
+```bash
+AUTH_SECRET=J8fK3mN9pQ2sT5vX8zA1cE4gH7jL0nR3uW6yB9dF2eI5k
+```
+
+**Validation** (from `lib/auth.ts:23-25`):
+
+The application validates `AUTH_SECRET` exists at startup:
+
+```typescript
+if (!process.env.AUTH_SECRET) {
+  throw new Error('AUTH_SECRET environment variable is required');
+}
+```
+
+## Token encryption and session security
+
+### JWT session strategy
+
+gitDash uses JWT (JSON Web Token) sessions instead of database sessions for stateless authentication.
+
+**Configuration** (from `lib/auth.ts:62-64`):
+
+```typescript
+session: {
+  strategy: 'jwt',
+}
+```
+
+**Security features**:
+
+1. **Encrypted access tokens**: GitHub access tokens are encrypted in JWT using `AUTH_SECRET`
+2. **Stateless sessions**: No database storage of session data
+3. **Automatic expiration**: Sessions have built-in expiration
+4. **Secure cookies**: Session cookies use `httpOnly`, `secure`, and `sameSite` flags
+
+### JWT callback security
+
+Access tokens are stored securely in the JWT during authentication (from `lib/auth.ts:40-47`):
+
+```typescript
+async jwt({ token, account, profile }) {
+  // Store access token and user info in JWT on first sign in
+  if (account && profile) {
+    token.accessToken = account.access_token;
+    token.username = profile.login;
+    token.avatarUrl = profile.avatar_url;
+  }
+  return token;
+}
+```
+
+**Security considerations**:
+
+- Access tokens are encrypted using `AUTH_SECRET`
+- Tokens are never exposed to client-side JavaScript
+- Only server-side code can decrypt and use access tokens
+- Token rotation happens automatically on sign-in
+
+<Note>
+JWT tokens are signed and encrypted but still should be treated as sensitive. Never log JWT contents or expose them in error messages.
+</Note>
+
+## GitHub OAuth security
+
+### OAuth scopes
+
+gitDash requests specific OAuth scopes to access GitHub data (from `lib/auth.ts:32-36`):
+
+```typescript
+authorization: {
+  params: {
+    scope: 'repo read:user user:email',
+  },
+}
+```
+
+**Requested scopes**:
+
+1. **repo**: Full control of private repositories
+   - Required to analyze private repositories
+   - Allows reading commit data, branches, and repository metadata
+   - Most sensitive scope - provides write access
+
+2. **read:user**: Read user profile data
+   - Required to display user information
+   - Provides name, avatar, and public profile data
+
+3. **user:email**: Read user email addresses
+   - Required to identify commit authors
+   - Provides access to primary and verified email addresses
+
+<Warning>
+The `repo` scope provides full read/write access to repositories. gitDash only reads data and never writes to repositories, but users should be aware of the scope's capabilities.
+</Warning>
+
+**Principle of least privilege**:
+
+- Request only necessary scopes
+- Document why each scope is needed
+- Consider scope restrictions for future features
+- Users can revoke access anytime at [GitHub authorized applications](https://github.com/settings/applications)
+
+### OAuth callback URL security
+
+The OAuth callback URL must match exactly to prevent authorization code interception attacks.
+
+**Validation** (from `lib/auth.ts:66-68`):
+
+```typescript
+// Trust host for development and production deployments
+trustHost: true,
+// Explicitly set the base path for OAuth callbacks
+basePath: '/api/auth',
+```
+
+**Best practices**:
+
+1. **Exact URL matching**: Callback URL must match character-for-character
+   ```
+   ✓ https://gitdash.example.com/api/auth/callback/github
+   ✗ https://gitdash.example.com/api/auth/callback/github/
+   ✗ http://gitdash.example.com/api/auth/callback/github
+   ```
+
+2. **Protocol enforcement**: Always use HTTPS in production
+   ```
+   Development: http://localhost:3000/api/auth/callback/github
+   Production:  https://yourdomain.com/api/auth/callback/github
+   ```
+
+3. **Separate OAuth Apps**: Use different OAuth Apps for development and production
+   - Prevents credential leakage between environments
+   - Allows independent rotation of secrets
+   - Isolates access tokens
+
+4. **Domain validation**: Never use wildcard domains in callback URLs
+
+## HTTPS requirement for production
+
+<Warning>
+HTTPS is mandatory for production deployments. HTTP connections expose sensitive data and break OAuth security.
+</Warning>
+
+### Why HTTPS is required
+
+1. **OAuth security**: GitHub requires HTTPS for production OAuth apps
+2. **Session cookies**: Secure cookies require HTTPS (`secure` flag)
+3. **Token protection**: Access tokens transmitted over HTTPS are encrypted in transit
+4. **Man-in-the-middle prevention**: HTTPS prevents interception of credentials
+5. **Browser security**: Modern browsers restrict features on HTTP sites
+
+### HTTPS enforcement
+
+Most hosting platforms provide automatic HTTPS:
+
+- **Vercel**: Automatic HTTPS with free SSL certificates
+- **Railway**: Free SSL on all deployments
+- **Render**: Automatic SSL for all web services
+- **DigitalOcean**: Free managed SSL certificates
+
+**For self-hosted deployments**:
+
+1. Use Let's Encrypt for free SSL certificates
+2. Configure reverse proxy (Nginx, Caddy) with SSL
+3. Redirect HTTP to HTTPS
+4. Use HSTS headers
+
+```nginx
+# Nginx example
+server {
+  listen 80;
+  server_name gitdash.example.com;
+  return 301 https://$server_name$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name gitdash.example.com;
+  
+  ssl_certificate /path/to/cert.pem;
+  ssl_certificate_key /path/to/key.pem;
+  
+  # HSTS header
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  
+  location / {
+    proxy_pass http://localhost:3000;
+  }
+}
+```
+
+## Data privacy and handling
+
+### Token storage
+
+**Where tokens are stored**:
+
+1. **Server-side**: Encrypted in JWT session (from `lib/auth.ts:42-43`)
+   ```typescript
+   token.accessToken = account.access_token;
+   ```
+
+2. **Client-side**: Never - tokens stay server-side only
+
+3. **Database**: None - gitDash doesn't use a database for sessions
+
+**Token usage** (from `lib/auth.ts:89`):
+
+```typescript
+accessToken: (session as any).accessToken || ''
+```
+
+Access tokens are:
+- Only used for GitHub API requests
+- Never logged or exposed in responses
+- Automatically rotated on sign-in
+- Scoped to authenticated user's permissions
+
+### User data privacy
+
+**Data gitDash accesses**:
+
+1. **Repository data**: Commits, branches, file changes
+2. **User profiles**: Name, email, avatar, username
+3. **Contribution metrics**: Lines changed, commit messages, timestamps
+
+**Data gitDash does NOT access**:
+
+- Issues or pull requests (unless explicitly added in future)
+- Private conversations or comments
+- Account settings or billing information
+- Other authorized applications
+- SSH keys or personal access tokens
+
+**Data retention**:
+
+- No persistent storage - all data is fetched on-demand
+- Session data expires with JWT expiration
+- No logging of user data or metrics
+- No third-party analytics (unless you add them)
+
+<Note>
+OAuth tokens are session-scoped and used only for the authenticated user's requests. gitDash never stores tokens in a database or shares them with third parties.
+</Note>
+
+### AI feature privacy
+
+When using the AI Manager Report feature:
+
+1. **Data sent to OpenAI**: Summarized analysis data (commit stats, contributor metrics)
+2. **Data NOT sent**: Individual commit messages, file contents, user emails
+3. **Optional feature**: Completely optional - requires explicit `OPENAI_API_KEY`
+4. **Graceful fallback**: Feature disabled if API key not configured
+
+**OpenAI data handling**:
+
+- Review [OpenAI's data usage policy](https://openai.com/policies/usage-policies)
+- Data sent to OpenAI is subject to their privacy policy
+- Consider implications before enabling for sensitive repositories
+- Use environment variables to control AI features per deployment
+
+## Production security checklist
+
+Before deploying to production, verify:
+
+### Environment variables
+
+- [ ] `AUTH_SECRET` is a strong random string (32+ characters)
+- [ ] `AUTH_SECRET` is different from development
+- [ ] `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are for production OAuth App
+- [ ] `NEXTAUTH_URL` matches production domain exactly
+- [ ] `.env.local` is in `.gitignore` and never committed
+- [ ] All secrets are stored in hosting platform's secure environment variable system
+
+### OAuth configuration
+
+- [ ] Production GitHub OAuth App created separately from development
+- [ ] OAuth callback URL matches `https://your-domain.com/api/auth/callback/github`
+- [ ] Homepage URL set to `https://your-domain.com`
+- [ ] OAuth scopes documented and justified (`repo`, `read:user`, `user:email`)
+
+### HTTPS and domain
+
+- [ ] HTTPS enabled and working
+- [ ] HTTP redirects to HTTPS
+- [ ] SSL certificate is valid and not expired
+- [ ] HSTS header configured (optional but recommended)
+- [ ] Domain matches `NEXTAUTH_URL` exactly
+
+### Application security
+
+- [ ] No console.log of sensitive data in production code
+- [ ] Error messages don't expose sensitive information
+- [ ] Dependencies are up to date (`npm audit`)
+- [ ] TypeScript strict mode enabled
+- [ ] No debugging endpoints or test routes in production
+
+### Monitoring and incident response
+
+- [ ] Error logging configured (but not logging sensitive data)
+- [ ] Plan for credential rotation if compromised
+- [ ] Contact method for security issues
+- [ ] Regular security updates schedule
+
+## Incident response
+
+If credentials are compromised:
+
+<Steps>
+  <Step title="Immediately rotate credentials">
+    1. Generate new `AUTH_SECRET`: `openssl rand -base64 32`
+    2. Create new GitHub OAuth App or regenerate client secret
+    3. Generate new `OPENAI_API_KEY` if compromised
+  </Step>
+  
+  <Step title="Update production environment">
+    1. Update all environment variables in hosting platform
+    2. Update OAuth callback URLs if OAuth App changed
+    3. Trigger new deployment
+  </Step>
+  
+  <Step title="Invalidate sessions">
+    Changing `AUTH_SECRET` automatically invalidates all existing sessions. All users will need to sign in again.
+  </Step>
+  
+  <Step title="Audit and investigate">
+    1. Review access logs for suspicious activity
+    2. Check GitHub OAuth App access logs
+    3. Identify how credentials were compromised
+    4. Implement additional safeguards
+  </Step>
+  
+  <Step title="Document and learn">
+    1. Document the incident and response
+    2. Update security procedures
+    3. Review and improve security practices
+  </Step>
+</Steps>
+
+## Security updates
+
+Stay informed about security issues:
+
+1. **Dependencies**: Run `npm audit` regularly
+   ```bash
+   npm audit
+   npm audit fix
+   ```
+
+2. **Next.js security**: Follow [Next.js security announcements](https://github.com/vercel/next.js/security/advisories)
+
+3. **Auth.js security**: Monitor [Auth.js security](https://authjs.dev/security)
+
+4. **GitHub security**: Review [GitHub security advisories](https://github.com/advisories)
+
+<Tip>
+Set up Dependabot in your GitHub repository to automatically create PRs for dependency updates and security patches.
+</Tip>
+
+## Additional security resources
+
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [Next.js Security Headers](https://nextjs.org/docs/app/building-your-application/configuring/security-headers)
+- [Auth.js Best Practices](https://authjs.dev/guides/best-practices)
+- [GitHub OAuth Best Practices](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/best-practices-for-oauth-apps)
+
+<Note>
+Security is an ongoing process, not a one-time checklist. Regularly review and update your security practices as the application and threat landscape evolves.
+</Note>

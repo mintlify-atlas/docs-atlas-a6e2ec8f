@@ -1,0 +1,412 @@
+---
+title: Deployment
+description: Deploy gitDash to Vercel and other hosting platforms
+---
+
+## Prerequisites
+
+Before deploying gitDash, ensure you have:
+
+- A GitHub account with repositories you want to analyze
+- A GitHub OAuth App configured (see [Configuration](/guides/configuration))
+- Node.js 18 or higher installed locally
+- Optional: OpenAI API key for AI Manager Report feature
+
+## Deploy to Vercel (recommended)
+
+Vercel is the recommended platform for deploying gitDash. It provides zero-configuration deployments, automatic HTTPS, and seamless Next.js integration.
+
+<Steps>
+  <Step title="Push code to GitHub">
+    Ensure your gitDash code is in a GitHub repository:
+    
+    ```bash
+    git init
+    git add .
+    git commit -m "Initial commit"
+    git remote add origin https://github.com/yourusername/gitdash.git
+    git push -u origin main
+    ```
+  </Step>
+  
+  <Step title="Import project in Vercel">
+    1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
+    2. Click "Add New..." → "Project"
+    3. Select your gitDash repository from the list
+    4. Click "Import"
+  </Step>
+  
+  <Step title="Configure environment variables">
+    In the Vercel project settings, add all required environment variables:
+    
+    - `GITHUB_CLIENT_ID`: Your GitHub OAuth App Client ID
+    - `GITHUB_CLIENT_SECRET`: Your GitHub OAuth App Client Secret
+    - `AUTH_SECRET`: Generate a new random secret (don't reuse development secret)
+    - `NEXTAUTH_URL`: Your Vercel deployment URL (e.g., `https://gitdash.vercel.app`)
+    - `OPENAI_API_KEY`: Your OpenAI API key (optional)
+  </Step>
+  
+  <Step title="Update OAuth callback URL">
+    Update your GitHub OAuth App settings:
+    
+    1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+    2. Select your OAuth App
+    3. Update the Authorization callback URL to: `https://your-vercel-domain.vercel.app/api/auth/callback/github`
+    4. Update Homepage URL to: `https://your-vercel-domain.vercel.app`
+    5. Save changes
+  </Step>
+  
+  <Step title="Deploy">
+    Click "Deploy" in Vercel. The deployment will:
+    
+    1. Install dependencies (`npm install`)
+    2. Run type checking and linting
+    3. Build the application (`npm run build`)
+    4. Deploy to a production URL
+    
+    Deployment typically takes 2-3 minutes.
+  </Step>
+  
+  <Step title="Verify deployment">
+    1. Visit your Vercel deployment URL
+    2. Click "Sign in with GitHub"
+    3. Authorize the OAuth scopes
+    4. Verify you can access the dashboard
+  </Step>
+</Steps>
+
+<Tip>
+Vercel automatically deploys updates when you push to your main branch. Configure preview deployments for pull requests in the Vercel project settings.
+</Tip>
+
+### Custom domain setup
+
+To use a custom domain with Vercel:
+
+<Steps>
+  <Step title="Add domain in Vercel">
+    1. Go to your project settings in Vercel
+    2. Navigate to "Domains"
+    3. Add your custom domain (e.g., `gitdash.yourdomain.com`)
+  </Step>
+  
+  <Step title="Configure DNS">
+    Add a CNAME record in your DNS provider:
+    
+    ```
+    Type: CNAME
+    Name: gitdash
+    Value: cname.vercel-dns.com
+    ```
+  </Step>
+  
+  <Step title="Update environment variables">
+    Update `NEXTAUTH_URL` in Vercel environment variables to your custom domain:
+    
+    ```
+    NEXTAUTH_URL=https://gitdash.yourdomain.com
+    ```
+  </Step>
+  
+  <Step title="Update GitHub OAuth callback">
+    Update your GitHub OAuth App callback URL to match your custom domain:
+    
+    ```
+    https://gitdash.yourdomain.com/api/auth/callback/github
+    ```
+  </Step>
+</Steps>
+
+## Deploy to other platforms
+
+gitDash is a standard Next.js application and can be deployed to any Node.js hosting platform.
+
+### General deployment steps
+
+<Steps>
+  <Step title="Build the application">
+    Run the production build command:
+    
+    ```bash
+    npm install
+    npm run build
+    ```
+    
+    This creates an optimized production build in the `.next` directory.
+  </Step>
+  
+  <Step title="Set environment variables">
+    Configure all required environment variables in your hosting platform:
+    
+    ```bash
+    GITHUB_CLIENT_ID=your_github_client_id
+    GITHUB_CLIENT_SECRET=your_github_client_secret
+    AUTH_SECRET=your_production_secret
+    NEXTAUTH_URL=https://your-production-domain.com
+    OPENAI_API_KEY=your_openai_key  # Optional
+    ```
+  </Step>
+  
+  <Step title="Configure build settings">
+    Set the following commands in your hosting platform:
+    
+    - **Build command**: `npm run build`
+    - **Start command**: `npm run start`
+    - **Node version**: 18 or higher
+  </Step>
+  
+  <Step title="Update OAuth callback URL">
+    Update your GitHub OAuth App with your production domain:
+    
+    ```
+    https://your-production-domain.com/api/auth/callback/github
+    ```
+  </Step>
+  
+  <Step title="Deploy and verify">
+    Deploy your application and verify:
+    
+    1. Application loads correctly
+    2. GitHub OAuth authentication works
+    3. Dashboard and analysis features function properly
+  </Step>
+</Steps>
+
+### Platform-specific guides
+
+<Accordion title="Railway">
+  1. Create a new project in Railway
+  2. Connect your GitHub repository
+  3. Add environment variables in the Variables tab
+  4. Railway auto-detects Next.js and configures build settings
+  5. Deploy using the Railway dashboard
+  
+  **Domain**: Railway provides a `.railway.app` domain or you can add a custom domain.
+</Accordion>
+
+<Accordion title="Render">
+  1. Create a new Web Service in Render
+  2. Connect your GitHub repository
+  3. Set environment to "Node"
+  4. Configure:
+     - **Build Command**: `npm install && npm run build`
+     - **Start Command**: `npm run start`
+  5. Add environment variables in the Environment tab
+  6. Deploy
+  
+  **Domain**: Render provides a `.onrender.com` domain or custom domain support.
+</Accordion>
+
+<Accordion title="DigitalOcean App Platform">
+  1. Create a new App in DigitalOcean
+  2. Connect your GitHub repository
+  3. DigitalOcean auto-detects Next.js settings
+  4. Add environment variables in App Settings
+  5. Configure scaling and instance size
+  6. Deploy
+  
+  **Domain**: DigitalOcean provides a `.ondigitalocean.app` domain.
+</Accordion>
+
+<Accordion title="Self-hosted (Docker)">
+  Create a `Dockerfile` in your project root:
+  
+  ```dockerfile
+  FROM node:18-alpine AS builder
+  WORKDIR /app
+  COPY package*.json ./
+  RUN npm ci
+  COPY . .
+  RUN npm run build
+  
+  FROM node:18-alpine AS runner
+  WORKDIR /app
+  ENV NODE_ENV=production
+  COPY --from=builder /app/public ./public
+  COPY --from=builder /app/.next/standalone ./
+  COPY --from=builder /app/.next/static ./.next/static
+  
+  EXPOSE 3000
+  ENV PORT 3000
+  CMD ["node", "server.js"]
+  ```
+  
+  Build and run:
+  
+  ```bash
+  docker build -t gitdash .
+  docker run -p 3000:3000 \
+    -e GITHUB_CLIENT_ID=your_client_id \
+    -e GITHUB_CLIENT_SECRET=your_client_secret \
+    -e AUTH_SECRET=your_secret \
+    -e NEXTAUTH_URL=https://your-domain.com \
+    gitdash
+  ```
+</Accordion>
+
+## Environment variables in production
+
+<Warning>
+Production environment variables should be different from development. Never reuse development secrets in production.
+</Warning>
+
+### Required production variables
+
+```bash
+GITHUB_CLIENT_ID=prod_client_id_here
+GITHUB_CLIENT_SECRET=prod_client_secret_here
+AUTH_SECRET=$(openssl rand -base64 32)  # Generate new secret
+NEXTAUTH_URL=https://your-production-domain.com
+```
+
+### Optional production variables
+
+```bash
+OPENAI_API_KEY=sk-...  # For AI Manager Report
+NODE_ENV=production    # Usually auto-set by hosting platforms
+```
+
+## HTTPS requirement
+
+<Warning>
+All production deployments must use HTTPS. OAuth and session management require secure connections to protect user credentials.
+</Warning>
+
+gitDash requires HTTPS in production for:
+
+- GitHub OAuth authentication
+- Secure session cookies
+- JWT token encryption
+- API request security
+
+Most hosting platforms (Vercel, Railway, Render) provide automatic HTTPS with free SSL certificates.
+
+## Post-deployment checklist
+
+After deploying, verify the following:
+
+- [ ] Application loads at production URL
+- [ ] HTTPS is enabled and working
+- [ ] GitHub OAuth sign-in works
+- [ ] Environment variables are set correctly
+- [ ] OAuth callback URL matches production domain
+- [ ] Dashboard and repository listing work
+- [ ] Analysis features function properly
+- [ ] AI Manager Report works (if OpenAI key configured)
+- [ ] No console errors in browser
+- [ ] Build completed successfully
+
+## Monitoring and maintenance
+
+### Build logs
+
+Monitor build logs for errors:
+
+```bash
+# Successful build output
+✓ Compiled successfully
+✓ Linting and checking validity of types
+✓ Collecting page data
+✓ Generating static pages
+✓ Finalizing page optimization
+```
+
+### Runtime errors
+
+Common runtime issues to monitor:
+
+- Authentication failures (check OAuth configuration)
+- GitHub API rate limits (authenticated: 5,000 requests/hour)
+- Missing environment variables (check logs)
+- TypeScript errors (run `npm run type-check` locally)
+
+<Tip>
+Enable error tracking with services like Sentry or LogRocket for production monitoring.
+</Tip>
+
+## Updating your deployment
+
+### Vercel
+
+Push changes to your GitHub repository:
+
+```bash
+git add .
+git commit -m "Update feature"
+git push origin main
+```
+
+Vercel automatically deploys the update.
+
+### Other platforms
+
+Most platforms support automatic deployments from GitHub. For manual deployments:
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Rebuild
+npm install
+npm run build
+
+# Restart the application
+npm run start
+```
+
+## Rollback
+
+If a deployment causes issues:
+
+### Vercel
+
+1. Go to your project in Vercel
+2. Navigate to "Deployments"
+3. Find a previous working deployment
+4. Click "..." → "Promote to Production"
+
+### Other platforms
+
+Rollback using Git:
+
+```bash
+# Find the last working commit
+git log --oneline
+
+# Revert to that commit
+git revert <commit-hash>
+git push origin main
+```
+
+## Troubleshooting deployment
+
+<Accordion title="Build fails with TypeScript errors">
+  1. Run `npm run type-check` locally to identify errors
+  2. Fix TypeScript errors in your code
+  3. Test the build locally with `npm run build`
+  4. Push fixes and redeploy
+</Accordion>
+
+<Accordion title="OAuth authentication fails in production">
+  1. Verify `NEXTAUTH_URL` matches your production domain exactly
+  2. Check GitHub OAuth App callback URL matches `{NEXTAUTH_URL}/api/auth/callback/github`
+  3. Ensure HTTPS is enabled (required for OAuth)
+  4. Verify `AUTH_SECRET` is set and is a strong random string
+  5. Clear browser cookies and try again
+</Accordion>
+
+<Accordion title="Environment variables not loading">
+  1. Verify all required variables are set in hosting platform
+  2. Check for typos in variable names
+  3. Ensure values don't contain special characters that need escaping
+  4. Redeploy after adding/updating environment variables
+  5. Check build logs for validation errors
+</Accordion>
+
+<Accordion title="Application crashes on startup">
+  1. Check build logs for errors
+  2. Verify Node.js version is 18 or higher
+  3. Ensure all dependencies are installed (`npm install`)
+  4. Check for missing required environment variables
+  5. Review runtime logs for specific error messages
+</Accordion>
