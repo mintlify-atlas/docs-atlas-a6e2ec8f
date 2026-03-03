@@ -1,0 +1,80 @@
+{
+  "projectType": "saas",
+  "projectName": "gitDash",
+  "projectDescription": "GitHub contribution insights dashboard with AI-powered analytics and real-time visualizations",
+  "theme": "palm",
+  "primaryColor": "#0969DA",
+  "lightColor": "#54AEFF",
+  "darkColor": "#0550AE",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/dashboard",
+              "features/analysis-modes",
+              "features/visualizations",
+              "features/ai-manager-report",
+              "features/exports"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/configuration",
+              "guides/deployment",
+              "guides/troubleshooting",
+              "guides/security"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/repositories",
+              "api-reference/branches",
+              "api-reference/analyze",
+              "api-reference/advanced-analysis",
+              "api-reference/ai-report"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "GitHub OAuth authentication with NextAuth",
+    "Multiple analysis modes (blame, commits, GitHub API, hybrid)",
+    "Real-time streaming analysis with SSE progress updates",
+    "AI-powered manager reports using OpenAI",
+    "Rich visualizations (timelines, heatmaps, Gantt charts)",
+    "CSV/text exports for contributors and commit data",
+    "Rate limit handling and caching",
+    "Repository and branch browsing"
+  ],
+  "publicApiSurface": [
+    "GET /api/github/repos - List user repositories",
+    "GET /api/github/branches - List repository branches",
+    "POST /api/github/analyze - Analyze contributions",
+    "GET /api/github/analyze/stream - Stream analysis progress",
+    "POST /api/github/analyze/advanced - Advanced analysis",
+    "GET /api/github/analyze/advanced/stream - Stream advanced analysis",
+    "POST /api/ai/manager-report - Generate AI manager report"
+  ]
+}
